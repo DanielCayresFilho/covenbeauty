@@ -224,14 +224,11 @@ export class AuthService {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: this.config.getOrThrow<string>('JWT_ACCESS_EXPIRES_IN'),
       } as JwtSignOptions),
-      this.jwt.signAsync(
-        { ...payload, jti },
-        {
-          secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
-          expiresIn: refreshTtl,
-          jwtid: jti,
-        } as JwtSignOptions,
-      ),
+      this.jwt.signAsync(payload, {
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+        expiresIn: refreshTtl,
+        jwtid: jti, // define o claim jti (não repetir no payload!)
+      } as JwtSignOptions),
     ]);
 
     const tokenHash = await argon2.hash(refreshToken, ARGON2_OPTIONS);
