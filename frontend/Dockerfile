@@ -32,7 +32,9 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY serve.mjs ./serve.mjs
 
-RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+# Cria usuário não-root. Sem chown -R (lento em node_modules; os arquivos já são
+# legíveis por "other" e o servidor não escreve em /app).
+RUN addgroup -S app && adduser -S app -G app
 USER app
 
 EXPOSE 3021

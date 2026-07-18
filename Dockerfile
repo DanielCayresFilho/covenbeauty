@@ -32,8 +32,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
 
-# Roda como usuário sem privilégios.
-RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+# Roda como usuário sem privilégios. Sem chown -R (lento em node_modules; os
+# arquivos já são legíveis por "other" e a app não escreve em /app).
+RUN addgroup -S app && adduser -S app -G app
 USER app
 
 EXPOSE 3000
