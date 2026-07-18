@@ -6,7 +6,9 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm install (não ci) para resolver os binários nativos da plataforma do build
+# (o lock é gerado no Windows; o Alpine precisa dos binários musl/linux).
+RUN npm install --no-audit --no-fund
 
 COPY . .
 
@@ -24,7 +26,7 @@ ENV PORT=3000
 
 # Só dependências de produção (React/SSR + Hono para servir).
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # Saída do build + servidor de produção (estáticos + SSR).
 COPY --from=builder /app/dist ./dist
