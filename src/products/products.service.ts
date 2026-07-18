@@ -1,0 +1,143 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '@/prisma/prisma.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { QueryProductsDto } from './dto/query-products.dto';
+import { deriveUnitsInStock } from './stock.util';
+
+@Injectable()
+export class ProductsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateProductDto) {
+    await this.assertCategoryExists(dto.categoryId);
+
+    // Estoque utilizável inicial = total: unidades × quantidade por unidade.
+    const usableQuantity = new Prisma.Decimal(dto.quantityPerUnit).mul(
+      dto.unitsInStock,
+    );
+
+    return this.prisma.product.create({
+      data: {
+        name: dto.name.trim(),
+        description: dto.description,
+        categoryId: dto.categoryId,
+        type: dto.type,
+        price: new Prisma.Decimal(dto.price),
+        unitsInStock: dto.unitsInStock,
+        quantityPerUnit: new Prisma.Decimal(dto.quantityPerUnit),
+        measureUnit: dto.measureUnit,
+        usableQuantity,
+      },
+      include: { category: true },
+    });
+  }
+
+  async findAll(query: QueryProductsDto) {
+    const { search, categoryId, type, page, limit } = query;
+
+    const where: Prisma.ProductWhereInput = {
+      ...(search
+        ? { name: { contains: search, mode: 'insensitive' } }
+        : {}),
+      ...(categoryId ? { categoryId } : {}),
+      ...(type ? { type } : {}),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { category: true },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { total, page, limit, pages: Math.ceil(total / limit) },
+    };
+  }
+
+  async findOne(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: { category: true },
+    });
+    if (!product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+    return product;
+  }
+
+  async update(id: string, dto: UpdateProductDto) {
+    const current = await this.findOne(id);
+    if (dto.categoryId) {
+      await this.assertCategoryExists(dto.categoryId);
+    }
+
+    // Mudar a quantidade por unidade redefine a derivação de unidades.
+    // O estoque em si (usableQuantity) muda por reposição/consumo, não aqui.
+    let unitsInStock: number | undefined;
+    let quantityPerUnit: Prisma.Decimal | undefined;
+    if (dto.quantityPerUnit !== undefined) {
+      quantityPerUnit = new Prisma.Decimal(dto.quantityPerUnit);
+      unitsInStock = deriveUnitsInStock(current.usableQuantity, quantityPerUnit);
+    }
+
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        name: dto.name?.trim(),
+        description: dto.description,
+        categoryId: dto.categoryId,
+        type: dto.type,
+        price: dto.price !== undefined ? new Prisma.Decimal(dto.price) : undefined,
+        quantityPerUnit,
+        unitsInStock,
+        measureUnit: dto.measureUnit,
+      },
+      include: { category: true },
+    });
+  }
+
+  /** Reposição de estoque: entram `units` embalagens de `quantityPerUnit`. */
+  async restock(id: string, units: number) {
+    const product = await this.findOne(id);
+
+    const added = product.quantityPerUnit.mul(units);
+    const usableQuantity = product.usableQuantity.plus(added);
+
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        usableQuantity,
+        unitsInStock: deriveUnitsInStock(usableQuantity, product.quantityPerUnit),
+      },
+      include: { category: true },
+    });
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.prisma.product.delete({ where: { id } });
+    return { deleted: true, id };
+  }
+
+  private async assertCategoryExists(categoryId: string) {
+    const exists = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { id: true },
+    });
+    if (!exists) {
+      throw new BadRequestException('Categoria informada não existe');
+    }
+  }
+}

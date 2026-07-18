@@ -1,0 +1,12 @@
+node_modules
+.output
+.nitro
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+*.md

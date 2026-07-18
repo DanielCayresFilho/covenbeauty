@@ -1,0 +1,597 @@
+// Coven Beauty — schema Prisma
+// Postgres como banco de dados principal.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Papéis de quem opera o sistema (não inclui clientes do salão).
+enum Role {
+  ADMIN // Administração do salão (acesso total)
+  STAFF // Operadores / recepção (reservado para evoluções futuras)
+}
+
+/// Finalidade do produto.
+enum ProductType {
+  INTERNAL_USE // Uso interno (consumido nos atendimentos)
+  SALE // Revenda ao cliente
+}
+
+/// Unidade de medida do conteúdo do produto.
+enum MeasureUnit {
+  ML // Mililitros
+  G // Gramas
+}
+
+/// Natureza do registro na agenda.
+enum AppointmentType {
+  APPOINTMENT // Atendimento de um cliente
+  BLOCK // Bloqueio de agenda (almoço, folga, indisponibilidade)
+}
+
+/// Situação do agendamento.
+enum AppointmentStatus {
+  SCHEDULED // Agendado
+  DEPOSIT_PAID // Sinal pago
+  COMPLETED // Concluído
+  RETURN // Retorno (gerou reagendamento)
+}
+
+/// Forma de pagamento.
+enum PaymentMethod {
+  DEBIT // Débito
+  CREDIT // Crédito
+  PIX // PIX
+  CASH // Dinheiro
+}
+
+/// Situação da comanda.
+enum ComandaStatus {
+  OPEN // Aberta (cliente em atendimento)
+  CLOSED // Fechada (paga)
+}
+
+/// Prioridade de um lembrete.
+enum ReminderPriority {
+  LOW // Baixa
+  MEDIUM // Média
+  HIGH // Alta
+}
+
+/// Origem/tipo de um lembrete.
+enum ReminderType {
+  GENERAL // Manual (ex.: "Arrumar cafeteira")
+  CLIENT_BIRTHDAY // Aniversário de cliente (gerado automaticamente)
+}
+
+/// Foco da ficha de avaliação.
+enum EvaluationFocus {
+  FACIAL // Estética facial
+  CAPILLARY // Estética capilar (tricologia)
+  BOTH // Ambos
+}
+
+/// Fototipo de Fitzpatrick (I a VI).
+enum Fitzpatrick {
+  I
+  II
+  III
+  IV
+  V
+  VI
+}
+
+/// Tipo de pele.
+enum SkinType {
+  DRY // Seca
+  OILY // Oleosa
+  COMBINATION // Mista
+  SENSITIVE // Sensível
+  ACNE_PRONE // Acneica
+}
+
+/// Linhas do fluxo de caixa (categorias de lançamento financeiro).
+/// As 5 primeiras são as contas do plano de contas; as 3 últimas são
+/// movimentações abaixo da linha do lucro.
+enum CashFlowCategory {
+  INCOME // Entradas de dinheiro
+  VARIABLE_COST // Custos variáveis
+  FIXED_EXPENSE // Despesas fixas
+  PRO_LABORE // Pró-labore
+  INVESTMENT // Investimentos
+  PROFIT_DISTRIBUTION // Distribuição de lucros
+  APPLICATION // Aplicação
+  REDEMPTION // Resgate
+}
+
+/// Usuário do SISTEMA — quem faz login para administrar o salão.
+/// Clientes do salão NÃO são usuários (ver model Client).
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name")
+  role         Role      @default(ADMIN)
+  isActive     Boolean   @default(true) @map("is_active")
+  // Marca usuários que atendem clientes (aparecem como profissionais na agenda).
+  isProfessional Boolean @default(false) @map("is_professional")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  refreshTokens            RefreshToken[]
+  passwordResetCodes       PasswordResetCode[]
+  createdClients           Client[]      @relation("ClientCreatedBy")
+  professionalAppointments Appointment[] @relation("ProfessionalAppointments")
+  createdAppointments      Appointment[] @relation("AppointmentCreatedBy")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([role])
+  @@map("users")
+}
+
+/// Refresh tokens ativos (hash armazenado) para rotação/revogação de sessões.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Código de recuperação de senha (6 dígitos, hash armazenado, uso único).
+model PasswordResetCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_codes")
+}
+
+/// Cliente do salão — cadastro feito pelo admin. Não tem acesso ao sistema.
+model Client {
+  id        String   @id @default(uuid()) @db.Uuid
+  fullName  String   @map("full_name")
+  birthDate DateTime @map("birth_date") @db.Date
+  phone     String
+  email     String?
+  address   String?
+  notes     String? // Observações
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  appointments Appointment[]
+  comandas     Comanda[]
+  evaluations  ClientEvaluation[]
+  reminders    Reminder[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([fullName])
+  @@index([phone])
+  @@map("clients")
+}
+
+/// Categoria de produtos (ex.: Coloração, Finalizadores, Estética).
+model Category {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+
+  products Product[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+/// Produto do salão (uso interno ou revenda), com controle de estoque volumétrico.
+model Product {
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  type        ProductType
+  price       Decimal     @default(0) @db.Decimal(10, 2)
+
+  // Estoque: `unitsInStock` embalagens, cada uma com `quantityPerUnit` `measureUnit`.
+  unitsInStock    Int         @default(0) @map("units_in_stock")
+  quantityPerUnit Decimal     @map("quantity_per_unit") @db.Decimal(12, 3)
+  measureUnit     MeasureUnit @map("measure_unit")
+
+  // Quantidade total ainda utilizável (ex.: abriu 1000ml, usou 100ml -> 900ml).
+  // Inicializada em unitsInStock * quantityPerUnit; consumo será tratado depois.
+  usableQuantity Decimal @map("usable_quantity") @db.Decimal(12, 3)
+
+  isActive Boolean @default(true) @map("is_active")
+
+  categoryId String   @map("category_id") @db.Uuid
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  comandaProducts ComandaProduct[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([type])
+  @@map("products")
+}
+
+/// Categoria de procedimentos (ex.: Cabelo, Unhas, Estética Facial).
+model ProcedureCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+
+  procedures Procedure[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("procedure_categories")
+}
+
+/// Procedimento/serviço oferecido pelo salão.
+model Procedure {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // Duração em minutos — usada no cálculo da agenda/calendário.
+  durationMinutes Int     @map("duration_minutes")
+  price           Decimal @default(0) @db.Decimal(10, 2)
+
+  isActive Boolean @default(true) @map("is_active")
+
+  categoryId String            @map("category_id") @db.Uuid
+  category   ProcedureCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  appointmentProcedures AppointmentProcedure[]
+  comandaProcedures     ComandaProcedure[]
+  financialAccount      FinancialAccount?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([categoryId])
+  @@map("procedures")
+}
+
+/// Registro da agenda: um atendimento de cliente OU um bloqueio de horário.
+model Appointment {
+  id     String            @id @default(uuid()) @db.Uuid
+  type   AppointmentType   @default(APPOINTMENT)
+  status AppointmentStatus @default(SCHEDULED)
+
+  // Profissional que atende (é um User com isProfessional = true).
+  professionalId String @map("professional_id") @db.Uuid
+  professional   User   @relation("ProfessionalAppointments", fields: [professionalId], references: [id], onDelete: Restrict)
+
+  // Cliente do atendimento. Nulo quando type = BLOCK.
+  clientId String? @map("client_id") @db.Uuid
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time") // = startTime + soma das durações dos procedimentos
+
+  // ── Pagamento / financeiro (preenchido quando há forma de pagamento) ──
+  paymentMethod PaymentMethod? @map("payment_method")
+  installments  Int            @default(1) // parcelas (relevante só p/ crédito)
+  discount      Decimal        @default(0) @db.Decimal(10, 2)
+
+  // Sinal pago no ato do agendamento (abatido no fechamento da comanda).
+  depositAmount Decimal   @default(0) @map("deposit_amount") @db.Decimal(10, 2)
+  depositPaidAt DateTime? @map("deposit_paid_at")
+
+  subtotal              Decimal? @db.Decimal(10, 2) // soma dos procedimentos (snapshot)
+  feeRate               Decimal? @map("fee_rate") @db.Decimal(6, 4) // taxa aplicada (%)
+  feeAmount             Decimal? @map("fee_amount") @db.Decimal(10, 2)
+  feePassedToClient     Boolean  @default(false) @map("fee_passed_to_client")
+  amountChargedToClient Decimal? @map("amount_charged_to_client") @db.Decimal(10, 2) // o que o cliente paga
+  netAmount             Decimal? @map("net_amount") @db.Decimal(10, 2) // líquido do salão
+
+  notes String? // Observação (no BLOCK, o motivo do bloqueio)
+
+  // Retorno: aponta para o agendamento de origem (auto-reagendamento).
+  parentId String?       @map("parent_id") @db.Uuid
+  parent   Appointment?  @relation("AppointmentReturns", fields: [parentId], references: [id], onDelete: SetNull)
+  returns  Appointment[] @relation("AppointmentReturns")
+
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  procedures AppointmentProcedure[]
+  comanda    Comanda?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([professionalId, startTime])
+  @@index([clientId])
+  @@index([status])
+  @@index([startTime])
+  @@map("appointments")
+}
+
+/// Procedimento incluído em um agendamento, com snapshot de preço/duração
+/// (preserva o valor histórico mesmo se o procedimento mudar depois).
+model AppointmentProcedure {
+  id String @id @default(uuid()) @db.Uuid
+
+  appointmentId String      @map("appointment_id") @db.Uuid
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  procedureId String    @map("procedure_id") @db.Uuid
+  procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+
+  nameSnapshot     String  @map("name_snapshot")
+  priceSnapshot    Decimal @map("price_snapshot") @db.Decimal(10, 2)
+  durationSnapshot Int     @map("duration_snapshot") // minutos
+
+  @@index([appointmentId])
+  @@map("appointment_procedures")
+}
+
+/// Comanda — o "realizado" do atendimento. É a fonte de verdade do FINANCEIRO
+/// (o que entra é a comanda fechada, não o agendamento planejado).
+model Comanda {
+  id     String        @id @default(uuid()) @db.Uuid
+  status ComandaStatus @default(OPEN)
+
+  // 1:1 com o agendamento que a originou.
+  appointmentId String      @unique @map("appointment_id") @db.Uuid
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  clientId String? @map("client_id") @db.Uuid
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  discount Decimal @default(0) @db.Decimal(10, 2)
+
+  // ── Snapshot financeiro (preenchido no fechamento) ──
+  subtotal          Decimal? @db.Decimal(10, 2) // soma dos procedimentos da comanda
+  depositAmount     Decimal  @default(0) @map("deposit_amount") @db.Decimal(10, 2) // sinal abatido
+  total             Decimal? @db.Decimal(10, 2) // subtotal - desconto (valor cheio do serviço)
+  amountDue         Decimal? @map("amount_due") @db.Decimal(10, 2) // total - sinal (o que o cliente paga)
+  paymentMethod     PaymentMethod? @map("payment_method")
+  installments      Int      @default(1)
+  feeRate           Decimal? @map("fee_rate") @db.Decimal(6, 4)
+  feeAmount         Decimal? @map("fee_amount") @db.Decimal(10, 2)
+  netAmount         Decimal? @map("net_amount") @db.Decimal(10, 2) // líquido recebido no fechamento
+
+  notes String?
+
+  procedures ComandaProcedure[]
+  products   ComandaProduct[]
+
+  openedAt  DateTime  @default(now()) @map("opened_at")
+  closedAt  DateTime? @map("closed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([clientId])
+  @@map("comandas")
+}
+
+/// Procedimento incluído na comanda (snapshot; editável enquanto aberta).
+model ComandaProcedure {
+  id String @id @default(uuid()) @db.Uuid
+
+  comandaId String  @map("comanda_id") @db.Uuid
+  comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  procedureId String    @map("procedure_id") @db.Uuid
+  procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+
+  nameSnapshot     String  @map("name_snapshot")
+  priceSnapshot    Decimal @map("price_snapshot") @db.Decimal(10, 2)
+  durationSnapshot Int     @map("duration_snapshot")
+
+  @@index([comandaId])
+  @@map("comanda_procedures")
+}
+
+/// Produto CONSUMIDO no atendimento (baixa da quantidade utilizável do estoque).
+model ComandaProduct {
+  id String @id @default(uuid()) @db.Uuid
+
+  comandaId String  @map("comanda_id") @db.Uuid
+  comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
+
+  productId String  @map("product_id") @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  nameSnapshot String      @map("name_snapshot")
+  quantityUsed Decimal     @map("quantity_used") @db.Decimal(12, 3) // ex.: 150 (ml)
+  measureUnit  MeasureUnit @map("measure_unit")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([comandaId])
+  @@map("comanda_products")
+}
+
+/// Plano de contas. Contas de INCOME normalmente vêm dos procedimentos
+/// (procedureId); as de saída (custos/despesas/pró-labore/investimento)
+/// são cadastradas manualmente.
+model FinancialAccount {
+  id       String           @id @default(uuid()) @db.Uuid
+  name     String
+  category CashFlowCategory // apenas as 5 categorias de conta (validado no service)
+  isActive Boolean          @default(true) @map("is_active")
+
+  procedureId String?    @unique @map("procedure_id") @db.Uuid
+  procedure   Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
+
+  entries FinancialEntry[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@map("financial_accounts")
+}
+
+/// Lançamento do livro-caixa (entrada, saída ou movimentação abaixo da linha).
+model FinancialEntry {
+  id       String           @id @default(uuid()) @db.Uuid
+  date     DateTime         @db.Date
+  category CashFlowCategory
+  amount   Decimal          @db.Decimal(10, 2) // sempre positivo
+
+  accountId String?           @map("account_id") @db.Uuid
+  account   FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  description String?
+  createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@index([category])
+  @@index([accountId])
+  @@map("financial_entries")
+}
+
+/// Ficha de avaliação (anamnese) — prontuário histórico do cliente.
+/// Cada cliente pode ter várias, para acompanhar a evolução ao longo do tempo.
+model ClientEvaluation {
+  id       String          @id @default(uuid()) @db.Uuid
+  clientId String          @map("client_id") @db.Uuid
+  client   Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  focus    EvaluationFocus @default(BOTH)
+
+  evaluationDate DateTime @default(now()) @map("evaluation_date")
+
+  // ── 2. Histórico de saúde geral ──
+  allergies         String? // cosméticos, medicamentos, alimentos, iodo...
+  chronicDiseases   String? @map("chronic_diseases") // diabetes, hipertensão, tireoide...
+  hormonalChanges   String? @map("hormonal_changes") // SOP, menopausa, anticoncepcional
+  medications       String? // Roacutan, corticoides, antidepressivos, anticoagulantes
+  hasPacemaker      Boolean? @map("has_pacemaker") // contraindica correntes elétricas
+  hasMetalImplants  Boolean? @map("has_metal_implants")
+  hasDentalImplant  Boolean? @map("has_dental_implant")
+  prosthesesNotes   String? @map("prostheses_notes")
+  isPregnant        Boolean? @map("is_pregnant")
+  isBreastfeeding   Boolean? @map("is_breastfeeding")
+  recentSurgery     Boolean? @map("recent_surgery") // últimos 6 meses
+  recentSurgeryNotes String? @map("recent_surgery_notes")
+
+  // ── 3. Hábitos de vida ──
+  sleepHoursPerNight   Int?     @map("sleep_hours_per_night")
+  wakesUpTired         Boolean? @map("wakes_up_tired")
+  waterIntakeLiters    Decimal? @map("water_intake_liters") @db.Decimal(4, 2)
+  regularBowelFunction Boolean? @map("regular_bowel_function")
+  smokes               Boolean?
+  drinksAlcohol        Boolean? @map("drinks_alcohol")
+  habitsNotes          String?  @map("habits_notes")
+  stressLevel          Int?     @map("stress_level") // 1 a 10
+
+  // ── 4. Específico: estética facial ──
+  fitzpatrick            Fitzpatrick?
+  skinType               SkinType?    @map("skin_type")
+  skincareRoutine        String?      @map("skincare_routine")
+  usesSunscreen          Boolean?     @map("uses_sunscreen")
+  sunscreenSpf           Int?         @map("sunscreen_spf")
+  reappliesSunscreen     Boolean?     @map("reapplies_sunscreen")
+  facialAestheticHistory String?      @map("facial_aesthetic_history") // botox, preenchimento, PDO...
+  skinSensitivity        Boolean?     @map("skin_sensitivity") // vermelhidão/irritação fácil
+  hasRosacea             Boolean?     @map("has_rosacea")
+  frequentSunExposure    Boolean?     @map("frequent_sun_exposure")
+
+  // ── 5. Específico: estética capilar (tricologia) ──
+  washFrequencyPerWeek  Int?      @map("wash_frequency_per_week")
+  scalpComplaints       String?   @map("scalp_complaints") // coceira, caspa, dor, oleosidade, feridas
+  hasHairLoss           Boolean?  @map("has_hair_loss")
+  hairLossDuration      String?   @map("hair_loss_duration")
+  familyBaldnessHistory Boolean?  @map("family_baldness_history")
+  chemicalTreatments    String?   @map("chemical_treatments") // progressiva, alisamento, tintura...
+  lastChemicalDate      DateTime? @map("last_chemical_date") @db.Date
+  usesHeatTools         Boolean?  @map("uses_heat_tools") // secador, chapinha, babyliss
+  usesThermalProtector  Boolean?  @map("uses_thermal_protector")
+  hairCareRoutine       String?   @map("hair_care_routine")
+
+  // ── 6. Termo de consentimento e assinatura ──
+  declarationAccepted        Boolean  @default(false) @map("declaration_accepted") // veracidade
+  authorizesImageInternal    Boolean? @map("authorizes_image_internal") // fotos p/ prontuário
+  authorizesImageSocialMedia Boolean? @map("authorizes_image_social_media") // fotos p/ redes sociais
+  signedByName               String?  @map("signed_by_name")
+  signedAt                   DateTime? @map("signed_at")
+  signatureDataUrl           String?  @map("signature_data_url") @db.Text // assinatura (base64/URL)
+
+  notes       String?
+  createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([clientId])
+  @@index([evaluationDate])
+  @@map("client_evaluations")
+}
+
+/// Lembrete / tarefa do salão (ex.: "Arrumar cafeteira") com data e conclusão.
+model Reminder {
+  id          String           @id @default(uuid()) @db.Uuid
+  type        ReminderType     @default(GENERAL)
+  title       String
+  description String?
+  dueDate     DateTime         @map("due_date")
+  priority    ReminderPriority @default(MEDIUM)
+  completedAt DateTime?        @map("completed_at") // nulo = pendente
+
+  // Cliente vinculado (ex.: lembrete de aniversário).
+  clientId String? @map("client_id") @db.Uuid
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Evita duplicar o aniversário do mesmo cliente na mesma data (ano).
+  @@unique([clientId, type, dueDate])
+  @@index([dueDate])
+  @@index([completedAt])
+  @@map("reminders")
+}
+
+/// Meta financeira: valor-alvo de entradas num intervalo de datas.
+model FinancialGoal {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String?
+  startDate    DateTime @map("start_date") @db.Date
+  endDate      DateTime @map("end_date") @db.Date
+  targetAmount Decimal  @map("target_amount") @db.Decimal(10, 2)
+  createdById  String?  @map("created_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([startDate, endDate])
+  @@map("financial_goals")
+}

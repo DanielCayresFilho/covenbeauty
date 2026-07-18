@@ -1,0 +1,164 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-blood: var(--blood);
+  --color-blood-deep: var(--blood-deep);
+  --color-parchment: var(--parchment);
+  --color-ash: var(--ash);
+  --font-display: "UnifrakturCook", "Cinzel", serif;
+  --font-serif: "Cormorant Garamond", "Times New Roman", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui;
+}
+
+:root {
+  --radius: 0.375rem;
+  /* Coven Beauty — dark mystical palette */
+  --background: oklch(0.14 0.015 20);            /* near-black, warm */
+  --foreground: oklch(0.94 0.02 80);             /* parchment cream */
+  --card: oklch(0.17 0.02 20);
+  --card-foreground: oklch(0.94 0.02 80);
+  --popover: oklch(0.17 0.02 20);
+  --popover-foreground: oklch(0.94 0.02 80);
+  --primary: oklch(0.42 0.14 25);                /* blood burgundy */
+  --primary-foreground: oklch(0.96 0.02 80);
+  --secondary: oklch(0.22 0.02 20);
+  --secondary-foreground: oklch(0.94 0.02 80);
+  --muted: oklch(0.20 0.015 20);
+  --muted-foreground: oklch(0.68 0.02 60);
+  --accent: oklch(0.55 0.16 25);                 /* ember red */
+  --accent-foreground: oklch(0.96 0.02 80);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(0.96 0.02 80);
+  --border: oklch(0.28 0.03 25 / 60%);
+  --input: oklch(0.28 0.03 25);
+  --ring: oklch(0.55 0.16 25);
+
+  --blood: oklch(0.42 0.14 25);
+  --blood-deep: oklch(0.28 0.10 22);
+  --parchment: oklch(0.94 0.03 80);
+  --ash: oklch(0.55 0.02 60);
+}
+
+.dark {
+  --background: oklch(0.10 0.015 20);
+  --foreground: oklch(0.94 0.02 80);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-serif);
+    font-feature-settings: "liga", "dlig";
+    background-image:
+      radial-gradient(ellipse at top, oklch(0.22 0.08 25 / 0.35), transparent 60%),
+      radial-gradient(ellipse at bottom, oklch(0.18 0.05 25 / 0.4), transparent 70%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.01em; }
+}
+
+@utility text-blood { color: var(--blood); }
+@utility text-parchment { color: var(--parchment); }
+@utility bg-blood { background-color: var(--blood); }
+@utility bg-blood-deep { background-color: var(--blood-deep); }
+
+@utility grain {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+    opacity: 0.45;
+  }
+}
+
+@utility divider-ornament {
+  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+  color: var(--blood);
+  &::before, &::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(to right, transparent, var(--blood), transparent);
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 0.85; }
+  50% { opacity: 0.6; }
+  55% { opacity: 0.9; }
+}
+@utility flicker { animation: flicker 4s ease-in-out infinite; }
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-14px) rotate(1deg); }
+}
+@utility float-slow { animation: float-slow 8s ease-in-out infinite; }
+
+/* ── FullCalendar (tema Coven / dark) ── */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: color-mix(in oklab, var(--secondary) 60%, transparent);
+  --fc-today-bg-color: color-mix(in oklab, var(--blood) 10%, transparent);
+  --fc-now-indicator-color: var(--blood);
+  --fc-event-border-color: transparent;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion,
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  color: var(--muted-foreground);
+  text-decoration: none;
+  font-size: 0.75rem;
+}
+.fc-theme-standard td,
+.fc-theme-standard th,
+.fc-theme-standard .fc-scrollgrid {
+  border-color: var(--border);
+}
+.fc .fc-timegrid-slot { height: 2.4rem; }
+.fc .fc-event {
+  border: none;
+  border-radius: 6px;
+  padding: 1px 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.fc .fc-event-time { font-weight: 600; opacity: 0.9; }
+.fc .fc-col-header-cell-cushion { padding: 6px 0; }

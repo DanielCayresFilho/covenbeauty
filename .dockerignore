@@ -1,0 +1,16 @@
+node_modules
+dist
+npm-debug.log
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+coverage
+.vscode
+.idea
+*.md
+test
+
+# O frontend tem o próprio deploy (não entra na imagem do backend).
+frontend
