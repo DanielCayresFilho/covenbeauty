@@ -216,3 +216,53 @@
 .crm-ui .text-xs { font-size: 0.82rem; line-height: 1.15rem; }
 .crm-ui .text-sm { font-size: 0.95rem; line-height: 1.4rem; }
 .crm-ui .text-base { font-size: 1.05rem; line-height: 1.6rem; }
+
+/* ── Animações de navegação do CRM ── */
+@keyframes cb-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cb-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* O conteúdo aparece suave a cada troca de aba/página (key={pathname}). */
+.cb-page { animation: cb-fade 0.3s ease both; }
+
+/* Fallback: as seções entram em cascata quando a página monta. */
+.cb-page > * > * {
+  animation: cb-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cb-page > * > *:nth-child(1) { animation-delay: 0.03s; }
+.cb-page > * > *:nth-child(2) { animation-delay: 0.08s; }
+.cb-page > * > *:nth-child(3) { animation-delay: 0.13s; }
+.cb-page > * > *:nth-child(4) { animation-delay: 0.18s; }
+.cb-page > * > *:nth-child(5) { animation-delay: 0.23s; }
+.cb-page > * > *:nth-child(6) { animation-delay: 0.28s; }
+.cb-page > * > *:nth-child(n + 7) { animation-delay: 0.32s; }
+
+/* Progressive enhancement: revela cada seção CONFORME rola a página. */
+@supports (animation-timeline: view()) {
+  .cb-page > * > * {
+    animation-name: cb-fade-up;
+    animation-timeline: view();
+    animation-range: entry 0% entry 45%;
+    animation-delay: 0s;
+  }
+}
+
+/* Troca de aba/visualização dentro de uma página. */
+.cb-fade-in {
+  animation: cb-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Sidebar: leve zoom no ícone ao passar o mouse / item ativo. */
+.crm-ui nav a svg { transition: transform 0.15s ease; }
+.crm-ui nav a:hover svg { transform: scale(1.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-page,
+  .cb-page > * > *,
+  .cb-fade-in { animation: none !important; }
+}

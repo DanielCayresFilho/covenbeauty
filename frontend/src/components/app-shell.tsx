@@ -215,7 +215,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-16 md:px-6 md:pt-8">
-          {children}
+          {/* key={pathname}: re-anima a entrada do conteúdo a cada troca de aba/página */}
+          <div key={pathname} className="cb-page">
+            {children}
+          </div>
         </main>
       </div>
     </div>

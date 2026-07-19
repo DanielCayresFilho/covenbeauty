@@ -30,16 +30,16 @@ function FinanceiroPage() {
             <TabsTrigger value="goals">Metas</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="cashflow" className="mt-4">
+          <TabsContent value="cashflow" className="mt-4 cb-fade-in">
             <CashFlowTab />
           </TabsContent>
-          <TabsContent value="entries" className="mt-4">
+          <TabsContent value="entries" className="mt-4 cb-fade-in">
             <EntriesTab />
           </TabsContent>
-          <TabsContent value="accounts" className="mt-4">
+          <TabsContent value="accounts" className="mt-4 cb-fade-in">
             <AccountsTab />
           </TabsContent>
-          <TabsContent value="goals" className="mt-4">
+          <TabsContent value="goals" className="mt-4 cb-fade-in">
             <GoalsTab />
           </TabsContent>
         </Tabs>

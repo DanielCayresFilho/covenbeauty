@@ -191,11 +191,13 @@ function Agenda() {
       </div>
 
       {mounted ? (
-        mode === "calendar" ? (
-          <CalendarView onSelect={setSelected} />
-        ) : (
-          <ListView onSelect={setSelected} />
-        )
+        <div key={mode} className="cb-fade-in">
+          {mode === "calendar" ? (
+            <CalendarView onSelect={setSelected} />
+          ) : (
+            <ListView onSelect={setSelected} />
+          )}
+        </div>
       ) : (
         <Skeleton className="h-96 rounded-lg" />
       )}

@@ -5,6 +5,7 @@ import type { AuthUser } from '@/auth/decorators/current-user.decorator';
 import { ownerWhere } from '@/common/ownership';
 import { IncomeReportQuery } from './dto/income-report.query';
 import { CashFlowQuery } from './dto/cash-flow.query';
+import { SetOpeningDto } from './dto/set-opening.dto';
 
 const D0 = () => new Prisma.Decimal(0);
 const money = (v: Prisma.Decimal) => v.toFixed(2);
@@ -102,16 +103,25 @@ export class ReportsService {
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
-    const entries = await this.prisma.financialEntry.findMany({
-      where: { date: { gte: start, lte: end }, ...ownerWhere(user) },
-      select: {
-        date: true,
-        amount: true,
-        category: true,
-        accountId: true,
-        account: { select: { name: true } },
-      },
-    });
+    const [entries, openings] = await Promise.all([
+      this.prisma.financialEntry.findMany({
+        where: { date: { gte: start, lte: end }, ...ownerWhere(user) },
+        select: {
+          date: true,
+          amount: true,
+          category: true,
+          accountId: true,
+          account: { select: { name: true } },
+        },
+      }),
+      this.prisma.cashFlowOpening.findMany({
+        where: { year, ...ownerWhere(user) },
+        select: { month: true, amount: true },
+      }),
+    ]);
+
+    // Saldos iniciais manuais por mês (override); ausência = carryover.
+    const openingByMonth = new Map(openings.map((o) => [o.month, o.amount]));
 
     // Detalhamento por conta (para expandir cada categoria: procedimentos que
     // sincronizaram, despesas etc.), com 12 meses + total por conta.
@@ -172,8 +182,9 @@ export class ReportsService {
       resgate: D0(),
     };
 
-    let saldoInicial = new Prisma.Decimal(openingBalance);
+    let prevFinal = new Prisma.Decimal(openingBalance);
     const monthsOut = months.map((b, i) => {
+      const monthNum = i + 1;
       const saidas = b.variableCost
         .plus(b.fixedExpense)
         .plus(b.proLabore)
@@ -182,13 +193,16 @@ export class ReportsService {
       const margem = b.income.greaterThan(0)
         ? lucro.div(b.income).mul(100).toDecimalPlaces(2).toNumber()
         : null;
-      const si = saldoInicial;
+      // Saldo inicial: override manual do mês, senão carryover (saldo final anterior).
+      const override = openingByMonth.get(monthNum);
+      const si =
+        override ?? (i === 0 ? new Prisma.Decimal(openingBalance) : prevFinal);
       const saldoFinal = si
         .plus(lucro)
         .minus(b.distribution)
         .minus(b.application)
         .plus(b.redemption);
-      saldoInicial = saldoFinal;
+      prevFinal = saldoFinal;
 
       totals.entradas = totals.entradas.plus(b.income);
       totals.saidas = totals.saidas.plus(saidas);
@@ -202,8 +216,9 @@ export class ReportsService {
       totals.resgate = totals.resgate.plus(b.redemption);
 
       return {
-        month: i + 1,
+        month: monthNum,
         saldoInicial: money(si),
+        saldoInicialManual: openingByMonth.has(monthNum),
         entradas: money(b.income),
         saidas: money(saidas),
         custosVariaveis: money(b.variableCost),
@@ -239,10 +254,28 @@ export class ReportsService {
         distribuicaoLucros: money(totals.distribuicao),
         aplicacao: money(totals.aplicacao),
         resgate: money(totals.resgate),
-        saldoFinal: money(saldoInicial), // saldo final de dezembro
+        saldoFinal: money(prevFinal), // saldo final de dezembro
       },
       breakdown,
     };
+  }
+
+  /** Define (ou limpa, quando amount é null) o saldo inicial de um mês. */
+  async setOpening(user: AuthUser, dto: SetOpeningDto) {
+    const { year, month, amount } = dto;
+    if (amount === null || amount === undefined) {
+      await this.prisma.cashFlowOpening.deleteMany({
+        where: { ownerId: user.id, year, month },
+      });
+      return { year, month, cleared: true };
+    }
+    const value = new Prisma.Decimal(amount);
+    await this.prisma.cashFlowOpening.upsert({
+      where: { ownerId_year_month: { ownerId: user.id, year, month } },
+      create: { ownerId: user.id, year, month, amount: value },
+      update: { amount: value },
+    });
+    return { year, month, amount: money(value) };
   }
 
   /**

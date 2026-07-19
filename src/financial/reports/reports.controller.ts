@@ -1,9 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service';
 import { IncomeReportQuery } from './dto/income-report.query';
 import { CashFlowQuery } from './dto/cash-flow.query';
+import { SetOpeningDto } from './dto/set-opening.dto';
 import { AuthUser, CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { RolesGuard } from '@/auth/guards/roles.guard';
@@ -38,5 +39,11 @@ export class ReportsController {
   @ApiOperation({ summary: 'Fluxo de caixa mensal do ano' })
   cashFlow(@Query() query: CashFlowQuery, @CurrentUser() user: AuthUser) {
     return this.reports.cashFlow(query, user);
+  }
+
+  @Put('cash-flow/opening')
+  @ApiOperation({ summary: 'Define/limpa o saldo inicial de um mês (manual)' })
+  setOpening(@Body() dto: SetOpeningDto, @CurrentUser() user: AuthUser) {
+    return this.reports.setOpening(user, dto);
   }
 }

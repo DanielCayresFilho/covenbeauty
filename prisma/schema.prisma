@@ -604,6 +604,22 @@ model Reminder {
   @@map("reminders")
 }
 
+/// Saldo inicial do fluxo de caixa por mês (editável manualmente). Quando um
+/// mês não tem registro, o relatório usa o carryover (saldo final anterior).
+model CashFlowOpening {
+  id      String  @id @default(uuid()) @db.Uuid
+  ownerId String  @map("owner_id") @db.Uuid
+  year    Int
+  month   Int // 1-12
+  amount  Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([ownerId, year, month])
+  @@map("cash_flow_openings")
+}
+
 /// Meta financeira: valor-alvo de entradas num intervalo de datas.
 model FinancialGoal {
   id           String   @id @default(uuid()) @db.Uuid

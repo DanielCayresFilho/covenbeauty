@@ -1,10 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
@@ -14,6 +12,7 @@ import { MONTHS, money } from "./constants";
 interface MonthRow {
   month: number;
   saldoInicial: string;
+  saldoInicialManual?: boolean;
   entradas: string;
   saidas: string;
   custosVariaveis: string;
@@ -86,9 +85,8 @@ const fmtCell = (row: RowDef, value: string | number | null) => {
 
 export function CashFlowTab() {
   const now = new Date();
+  const qc = useQueryClient();
   const [year, setYear] = useState(now.getUTCFullYear());
-  const [openingInput, setOpeningInput] = useState("0");
-  const [opening, setOpening] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (key: string) =>
@@ -99,18 +97,23 @@ export function CashFlowTab() {
       return next;
     });
 
-  useEffect(() => {
-    const t = setTimeout(() => setOpening(Number(openingInput) || 0), 400);
-    return () => clearTimeout(t);
-  }, [openingInput]);
-
   const query = useQuery({
-    queryKey: ["cash-flow", year, opening],
+    queryKey: ["cash-flow", year],
     queryFn: () =>
       apiFetch<CashFlow>(
-        `/financial/reports/cash-flow?year=${year}&openingBalance=${opening}`,
+        `/financial/reports/cash-flow?year=${year}&openingBalance=0`,
       ),
     retry: false,
+  });
+
+  // Saldo inicial manual por mês (salva e recalcula o fluxo).
+  const saveOpening = useMutation({
+    mutationFn: (vars: { month: number; amount: number | null }) =>
+      apiFetch("/financial/reports/cash-flow/opening", {
+        method: "PUT",
+        body: JSON.stringify({ year, ...vars }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cash-flow", year] }),
   });
 
   return (
@@ -127,21 +130,12 @@ export function CashFlowTab() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Saldo inicial de janeiro (R$)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={openingInput}
-            onChange={(e) => setOpeningInput(e.target.value)}
-            className="h-9 w-40"
-          />
-        </div>
       </div>
 
       <p className="text-[0.7rem] text-muted-foreground">
-        Valores em R$. Arraste para o lado para ver todos os meses. Clique nas
-        linhas com seta (▸) para expandir e ver o detalhamento por conta.
+        Valores em R$. O <strong>Saldo Inicial</strong> de cada mês é editável
+        (clique e digite); em branco, ele puxa o saldo final do mês anterior.
+        Clique nas linhas com seta (▸) para ver o detalhamento por conta.
       </p>
 
       {query.isLoading ? (
@@ -210,11 +204,23 @@ export function CashFlowTab() {
                           row.label
                         )}
                       </td>
-                      {query.data!.months.map((mo) => (
-                        <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
-                          {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
-                        </td>
-                      ))}
+                      {query.data!.months.map((mo) =>
+                        row.key === "saldoInicial" ? (
+                          <td key={mo.month} className="px-1.5 py-1.5">
+                            <OpeningCell
+                              value={mo.saldoInicial}
+                              manual={!!mo.saldoInicialManual}
+                              onSave={(amount) =>
+                                saveOpening.mutate({ month: mo.month, amount })
+                              }
+                            />
+                          </td>
+                        ) : (
+                          <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
+                            {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
+                          </td>
+                        ),
+                      )}
                       <td className={cn("px-3 py-2.5 font-medium", valCls)}>
                         {row.key === "saldoInicial"
                           ? "—"
@@ -256,5 +262,50 @@ export function CashFlowTab() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Célula editável do Saldo Inicial de um mês (salva ao sair do campo). */
+function OpeningCell({
+  value,
+  manual,
+  onSave,
+}: {
+  value: string; // ex.: "615.00"
+  manual: boolean;
+  onSave: (amount: number | null) => void;
+}) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+
+  const commit = () => {
+    const trimmed = v.trim();
+    const amount = trimmed === "" ? null : Number(trimmed);
+    if (amount !== null && Number.isNaN(amount)) {
+      setV(value);
+      return;
+    }
+    // Só salva se mudou de fato (compara com o valor formatado atual).
+    if (Number(trimmed || 0) !== Number(value)) onSave(amount);
+  };
+
+  return (
+    <input
+      type="number"
+      step="0.01"
+      inputMode="decimal"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      title={manual ? "Saldo inicial manual (editado)" : "Automático — clique para editar"}
+      className={cn(
+        "w-full min-w-[4.5rem] rounded border border-transparent bg-transparent px-1.5 py-1 text-right text-[0.82rem] font-semibold text-foreground outline-none",
+        "hover:border-border focus:border-primary focus:bg-secondary",
+        manual && "text-primary",
+      )}
+    />
   );
 }
