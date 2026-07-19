@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,12 +27,28 @@ interface MonthRow {
   resgate: string;
   saldoFinal: string;
 }
+interface AccountBreak {
+  accountId: string;
+  name: string;
+  months: string[]; // 12 valores (toFixed 2)
+  total: string;
+}
 interface CashFlow {
   year: number;
   openingBalance: string;
   months: MonthRow[];
   total: Omit<MonthRow, "month" | "saldoInicial">;
+  breakdown: Record<string, AccountBreak[]>;
 }
+
+// Categorias que expandem para mostrar as contas (procedimentos, despesas...).
+const EXPANDABLE = new Set([
+  "entradas",
+  "custosVariaveis",
+  "despesasFixas",
+  "proLabore",
+  "investimentos",
+]);
 
 type RowKey = keyof Omit<MonthRow, "month" | "margemLucroLiquido">;
 interface RowDef {
@@ -73,6 +89,15 @@ export function CashFlowTab() {
   const [year, setYear] = useState(now.getUTCFullYear());
   const [openingInput, setOpeningInput] = useState("0");
   const [opening, setOpening] = useState(0);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   useEffect(() => {
     const t = setTimeout(() => setOpening(Number(openingInput) || 0), 400);
@@ -115,7 +140,8 @@ export function CashFlowTab() {
       </div>
 
       <p className="text-[0.7rem] text-muted-foreground">
-        Valores em R$. Arraste a tabela para o lado para ver todos os meses.
+        Valores em R$. Arraste para o lado para ver todos os meses. Clique nas
+        linhas com seta (▸) para expandir e ver o detalhamento por conta.
       </p>
 
       {query.isLoading ? (
@@ -153,34 +179,76 @@ export function CashFlowTab() {
                     : row.emphasis === "balance"
                       ? "font-semibold text-foreground"
                       : "text-foreground/90";
+                const accounts = query.data!.breakdown[row.key] ?? [];
+                const canExpand = EXPANDABLE.has(row.key) && accounts.length > 0;
+                const isOpen = expanded.has(row.key);
                 return (
-                  <tr key={row.key} className={cn("border-t border-border", rowBg)}>
-                    <td
-                      className={cn(
-                        "sticky left-0 z-10 px-3 py-2.5 text-left",
-                        stickyBg,
-                        row.indent ? "pl-6 text-muted-foreground" : "text-foreground",
-                        row.emphasis && "font-semibold",
-                      )}
-                    >
-                      {row.label}
-                    </td>
-                    {query.data!.months.map((mo) => (
-                      <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
-                        {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
+                  <Fragment key={row.key}>
+                    <tr className={cn("border-t border-border", rowBg)}>
+                      <td
+                        className={cn(
+                          "sticky left-0 z-10 px-3 py-2.5 text-left",
+                          stickyBg,
+                          row.indent ? "pl-6 text-muted-foreground" : "text-foreground",
+                          row.emphasis && "font-semibold",
+                        )}
+                      >
+                        {canExpand ? (
+                          <button
+                            type="button"
+                            onClick={() => toggle(row.key)}
+                            className="flex items-center gap-1.5 text-left hover:text-primary"
+                          >
+                            {isOpen ? (
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            <span>{row.label}</span>
+                          </button>
+                        ) : (
+                          row.label
+                        )}
                       </td>
-                    ))}
-                    <td className={cn("px-3 py-2.5 font-medium", valCls)}>
-                      {row.key === "saldoInicial"
-                        ? "—"
-                        : fmtCell(
-                            row,
-                            query.data!.total[
-                              row.key as keyof CashFlow["total"]
-                            ] as string | number | null,
-                          )}
-                    </td>
-                  </tr>
+                      {query.data!.months.map((mo) => (
+                        <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
+                          {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
+                        </td>
+                      ))}
+                      <td className={cn("px-3 py-2.5 font-medium", valCls)}>
+                        {row.key === "saldoInicial"
+                          ? "—"
+                          : fmtCell(
+                              row,
+                              query.data!.total[
+                                row.key as keyof CashFlow["total"]
+                              ] as string | number | null,
+                            )}
+                      </td>
+                    </tr>
+
+                    {/* Sub-linhas: contas/procedimentos que somaram nesta categoria. */}
+                    {canExpand &&
+                      isOpen &&
+                      accounts.map((acc) => (
+                        <tr
+                          key={row.key + acc.accountId}
+                          className="border-t border-border/40 bg-background/60"
+                        >
+                          <td className="sticky left-0 z-10 bg-card/95 py-2 pl-10 pr-3 text-left text-xs text-muted-foreground">
+                            {acc.name}
+                          </td>
+                          {acc.months.map((v, i) => (
+                            <td key={i} className="px-3 py-2 text-xs text-foreground/75">
+                              {money(v)}
+                            </td>
+                          ))}
+                          <td className="px-3 py-2 text-xs font-medium text-foreground/90">
+                            {money(acc.total)}
+                          </td>
+                        </tr>
+                      ))}
+                  </Fragment>
                 );
               })}
             </tbody>

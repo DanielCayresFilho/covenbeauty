@@ -104,8 +104,18 @@ export class ReportsService {
 
     const entries = await this.prisma.financialEntry.findMany({
       where: { date: { gte: start, lte: end }, ...ownerWhere(user) },
-      select: { date: true, amount: true, category: true },
+      select: {
+        date: true,
+        amount: true,
+        category: true,
+        accountId: true,
+        account: { select: { name: true } },
+      },
     });
+
+    // Detalhamento por conta (para expandir cada categoria: procedimentos que
+    // sincronizaram, despesas etc.), com 12 meses + total por conta.
+    const breakdown = this.buildBreakdown(entries);
 
     // Soma por mês e categoria.
     const months = Array.from({ length: 12 }, () => ({
@@ -231,7 +241,71 @@ export class ReportsService {
         resgate: money(totals.resgate),
         saldoFinal: money(saldoInicial), // saldo final de dezembro
       },
+      breakdown,
     };
+  }
+
+  /**
+   * Detalha cada categoria em contas (12 meses + total por conta), para o
+   * fluxo poder expandir/ocultar as entradas, custos variáveis, etc.
+   */
+  private buildBreakdown(
+    entries: {
+      date: Date;
+      amount: Prisma.Decimal;
+      category: CashFlowCategory;
+      accountId: string | null;
+      account: { name: string } | null;
+    }[],
+  ): Record<string, { accountId: string; name: string; months: string[]; total: string }[]> {
+    const CAT_TO_KEY: Partial<Record<CashFlowCategory, string>> = {
+      [CashFlowCategory.INCOME]: 'entradas',
+      [CashFlowCategory.VARIABLE_COST]: 'custosVariaveis',
+      [CashFlowCategory.FIXED_EXPENSE]: 'despesasFixas',
+      [CashFlowCategory.PRO_LABORE]: 'proLabore',
+      [CashFlowCategory.INVESTMENT]: 'investimentos',
+    };
+
+    // key -> accountKey -> { name, months[12], total }
+    const map = new Map<
+      string,
+      Map<string, { name: string; months: Prisma.Decimal[]; total: Prisma.Decimal }>
+    >();
+
+    for (const e of entries) {
+      const key = CAT_TO_KEY[e.category];
+      if (!key) continue; // categorias abaixo da linha não expandem
+      if (!map.has(key)) map.set(key, new Map());
+      const accounts = map.get(key)!;
+      const accKey = e.accountId ?? '__none__';
+      if (!accounts.has(accKey)) {
+        accounts.set(accKey, {
+          name: e.account?.name ?? 'Sem conta',
+          months: Array.from({ length: 12 }, () => D0()),
+          total: D0(),
+        });
+      }
+      const row = accounts.get(accKey)!;
+      const m = e.date.getUTCMonth();
+      row.months[m] = row.months[m].plus(e.amount);
+      row.total = row.total.plus(e.amount);
+    }
+
+    const out: Record<
+      string,
+      { accountId: string; name: string; months: string[]; total: string }[]
+    > = {};
+    for (const [key, accounts] of map) {
+      out[key] = [...accounts.entries()]
+        .map(([accountId, r]) => ({
+          accountId,
+          name: r.name,
+          months: r.months.map((v) => money(v)),
+          total: money(r.total),
+        }))
+        .sort((a, b) => Number(b.total) - Number(a.total));
+    }
+    return out;
   }
 
   // ─────────────── Helpers ───────────────
