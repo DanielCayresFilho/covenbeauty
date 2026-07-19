@@ -177,6 +177,9 @@ model Client {
   createdById String? @map("created_by_id") @db.Uuid
   createdBy   User?   @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
+  // Profissional "dono" do cliente (a quem ele pertence). Nulo = sem dono (visível só p/ admin).
+  ownerId String? @map("owner_id") @db.Uuid
+
   appointments Appointment[]
   comandas     Comanda[]
   evaluations  ClientEvaluation[]
@@ -187,6 +190,7 @@ model Client {
 
   @@index([fullName])
   @@index([phone])
+  @@index([ownerId])
   @@map("clients")
 }
 
@@ -227,6 +231,9 @@ model Product {
   categoryId String   @map("category_id") @db.Uuid
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
+  // Profissional "dono" do produto.
+  ownerId String? @map("owner_id") @db.Uuid
+
   comandaProducts ComandaProduct[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -235,6 +242,7 @@ model Product {
   @@index([name])
   @@index([categoryId])
   @@index([type])
+  @@index([ownerId])
   @@map("products")
 }
 
@@ -268,6 +276,9 @@ model Procedure {
   categoryId String            @map("category_id") @db.Uuid
   category   ProcedureCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
+  // Profissional "dono" do procedimento.
+  ownerId String? @map("owner_id") @db.Uuid
+
   appointmentProcedures AppointmentProcedure[]
   comandaProcedures     ComandaProcedure[]
   financialAccount      FinancialAccount?
@@ -277,6 +288,7 @@ model Procedure {
 
   @@index([name])
   @@index([categoryId])
+  @@index([ownerId])
   @@map("procedures")
 }
 
@@ -446,12 +458,16 @@ model FinancialAccount {
   procedureId String?    @unique @map("procedure_id") @db.Uuid
   procedure   Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
 
+  // Profissional "dono" da conta (financeiro por profissional).
+  ownerId String? @map("owner_id") @db.Uuid
+
   entries FinancialEntry[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([category])
+  @@index([ownerId])
   @@map("financial_accounts")
 }
 
@@ -468,12 +484,16 @@ model FinancialEntry {
   description String?
   createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
 
+  // Profissional "dono" do lançamento (financeiro por profissional).
+  ownerId String? @map("owner_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([date])
   @@index([category])
   @@index([accountId])
+  @@index([ownerId])
   @@map("financial_entries")
 }
 
@@ -570,6 +590,9 @@ model Reminder {
 
   createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
 
+  // Profissional "dono" do lembrete (cada um vê os seus no início).
+  ownerId String? @map("owner_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -577,6 +600,7 @@ model Reminder {
   @@unique([clientId, type, dueDate])
   @@index([dueDate])
   @@index([completedAt])
+  @@index([ownerId])
   @@map("reminders")
 }
 
@@ -589,9 +613,13 @@ model FinancialGoal {
   targetAmount Decimal  @map("target_amount") @db.Decimal(10, 2)
   createdById  String?  @map("created_by_id") @db.Uuid
 
+  // Profissional "dono" da meta (financeiro por profissional).
+  ownerId String? @map("owner_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([startDate, endDate])
+  @@index([ownerId])
   @@map("financial_goals")
 }

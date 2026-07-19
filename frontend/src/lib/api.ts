@@ -1,4 +1,4 @@
-import { getAccessToken } from "./auth";
+import { getAccessToken, clearSession } from "./auth";
 
 const BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -35,6 +35,17 @@ export async function apiFetch<T = unknown>(
     const message = Array.isArray(raw)
       ? raw.join(", ")
       : (raw ?? "Não foi possível concluir a requisição");
+
+    // Sessão inválida/expirada: limpa e volta pro login (exceto se já estiver nele).
+    if (
+      res.status === 401 &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.includes("/menu/login")
+    ) {
+      clearSession();
+      window.location.href = "/menu/login";
+    }
+
     throw new ApiError(message, res.status);
   }
 

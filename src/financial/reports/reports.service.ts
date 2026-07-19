@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { CashFlowCategory, Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { IncomeReportQuery } from './dto/income-report.query';
 import { CashFlowQuery } from './dto/cash-flow.query';
 
@@ -13,12 +15,13 @@ export class ReportsService {
 
   // ─────────────── Parte 1: entradas por dia/semana/mês ───────────────
 
-  async incomeByPeriod(query: IncomeReportQuery) {
+  async incomeByPeriod(query: IncomeReportQuery, user: AuthUser) {
     const { from, to, groupBy } = query;
 
     const entries = await this.prisma.financialEntry.findMany({
       where: {
         category: CashFlowCategory.INCOME,
+        ...ownerWhere(user),
         ...(from || to
           ? {
               date: {
@@ -48,18 +51,20 @@ export class ReportsService {
   }
 
   /** Resumo simples de um período: entradas, saídas por tipo e lucro. */
-  async summary(from?: string, to?: string) {
+  async summary(user: AuthUser, from?: string, to?: string) {
     const grouped = await this.prisma.financialEntry.groupBy({
       by: ['category'],
-      where:
-        from || to
+      where: {
+        ...ownerWhere(user),
+        ...(from || to
           ? {
               date: {
                 ...(from ? { gte: new Date(from) } : {}),
                 ...(to ? { lte: new Date(to) } : {}),
               },
             }
-          : {},
+          : {}),
+      },
       _sum: { amount: true },
     });
 
@@ -92,13 +97,13 @@ export class ReportsService {
 
   // ─────────────── Parte 2: fluxo de caixa mensal ───────────────
 
-  async cashFlow(query: CashFlowQuery) {
+  async cashFlow(query: CashFlowQuery, user: AuthUser) {
     const { year, openingBalance } = query;
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
 
     const entries = await this.prisma.financialEntry.findMany({
-      where: { date: { gte: start, lte: end } },
+      where: { date: { gte: start, lte: end }, ...ownerWhere(user) },
       select: { date: true, amount: true, category: true },
     });
 

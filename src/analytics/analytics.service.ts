@@ -6,6 +6,12 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import {
+  comandaOwnerWhere,
+  ownerWhere,
+  professionalWhere,
+} from '@/common/ownership';
 import { AnalyticsPeriodQuery } from './dto/analytics-period.query';
 import { TopClientsQuery } from './dto/top-clients.query';
 
@@ -14,8 +20,10 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Resumo do período (padrão: mês atual). */
-  async summary(query: AnalyticsPeriodQuery) {
+  async summary(query: AnalyticsPeriodQuery, user: AuthUser) {
     const { start, end } = this.resolveRange(query.from, query.to, 'month');
+    const apptScope = professionalWhere(user);
+    const comandaScope = comandaOwnerWhere(user);
 
     const [
       newClients,
@@ -26,12 +34,13 @@ export class AnalyticsService {
       revenueAgg,
     ] = await this.prisma.$transaction([
       this.prisma.client.count({
-        where: { createdAt: { gte: start, lte: end } },
+        where: { createdAt: { gte: start, lte: end }, ...ownerWhere(user) },
       }),
       this.prisma.appointment.count({
         where: {
           type: AppointmentType.APPOINTMENT,
           startTime: { gte: start, lte: end },
+          ...apptScope,
         },
       }),
       this.prisma.appointment.count({
@@ -39,6 +48,7 @@ export class AnalyticsService {
           type: AppointmentType.APPOINTMENT,
           status: AppointmentStatus.COMPLETED,
           startTime: { gte: start, lte: end },
+          ...apptScope,
         },
       }),
       this.prisma.appointment.count({
@@ -46,18 +56,21 @@ export class AnalyticsService {
           type: AppointmentType.APPOINTMENT,
           parentId: { not: null },
           startTime: { gte: start, lte: end },
+          ...apptScope,
         },
       }),
       this.prisma.appointment.count({
         where: {
           type: AppointmentType.BLOCK,
           startTime: { gte: start, lte: end },
+          ...apptScope,
         },
       }),
       this.prisma.comanda.aggregate({
         where: {
           status: ComandaStatus.CLOSED,
           closedAt: { gte: start, lte: end },
+          ...comandaScope,
         },
         _sum: { total: true },
         _count: true,
@@ -83,7 +96,7 @@ export class AnalyticsService {
   }
 
   /** Clientes que mais gastaram (padrão: ano atual), por comandas fechadas. */
-  async topClients(query: TopClientsQuery) {
+  async topClients(query: TopClientsQuery, user: AuthUser) {
     const { start, end } = this.resolveRange(query.from, query.to, 'year');
 
     const grouped = await this.prisma.comanda.groupBy({
@@ -92,6 +105,7 @@ export class AnalyticsService {
         status: ComandaStatus.CLOSED,
         closedAt: { gte: start, lte: end },
         clientId: { not: null },
+        ...comandaOwnerWhere(user),
       },
       _sum: { total: true },
       _count: true,

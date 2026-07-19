@@ -45,7 +45,7 @@ interface ApptItem {
   status: string;
   type: string;
   client: { fullName: string } | null;
-  professional: { fullName: string } | null;
+  professional: { id?: string; fullName: string } | null;
   procedures: { nameSnapshot: string }[];
   comanda: { id: string; status: string } | null;
 }
@@ -100,6 +100,12 @@ function Dashboard() {
     retry: false,
     staleTime: 30_000,
   });
+
+  // No início, o profissional vê a agenda DELE; o admin vê a de todos.
+  const isAdmin = user?.role === "ADMIN";
+  const todayAppts = (agenda.data?.data ?? []).filter(
+    (a) => isAdmin || a.professional?.id === user?.id,
+  );
 
   const reminders = useQuery({
     queryKey: ["reminders", "pending"],
@@ -205,11 +211,11 @@ function Dashboard() {
           <ListSkeleton />
         ) : agenda.isError ? (
           <LoadError />
-        ) : agenda.data!.data.length === 0 ? (
+        ) : todayAppts.length === 0 ? (
           <Empty>Nenhum atendimento para hoje.</Empty>
         ) : (
           <div className="space-y-2">
-            {agenda.data!.data.map((a) => {
+            {todayAppts.map((a) => {
               const isAppt = a.type === "APPOINTMENT";
               return (
                 <button

@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
@@ -14,7 +16,7 @@ import { deriveUnitsInStock } from './stock.util';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProductDto) {
+  async create(dto: CreateProductDto, ownerId: string) {
     await this.assertCategoryExists(dto.categoryId);
 
     // Estoque utilizável inicial = total: unidades × quantidade por unidade.
@@ -33,15 +35,17 @@ export class ProductsService {
         quantityPerUnit: new Prisma.Decimal(dto.quantityPerUnit),
         measureUnit: dto.measureUnit,
         usableQuantity,
+        ownerId,
       },
       include: { category: true },
     });
   }
 
-  async findAll(query: QueryProductsDto) {
+  async findAll(query: QueryProductsDto, user: AuthUser) {
     const { search, categoryId, type, page, limit } = query;
 
     const where: Prisma.ProductWhereInput = {
+      ...ownerWhere(user),
       ...(search
         ? { name: { contains: search, mode: 'insensitive' } }
         : {}),
@@ -66,9 +70,9 @@ export class ProductsService {
     };
   }
 
-  async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+  async findOne(id: string, user: AuthUser) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, ...ownerWhere(user) },
       include: { category: true },
     });
     if (!product) {
@@ -77,8 +81,8 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: string, dto: UpdateProductDto) {
-    const current = await this.findOne(id);
+  async update(id: string, dto: UpdateProductDto, user: AuthUser) {
+    const current = await this.findOne(id, user);
     if (dto.categoryId) {
       await this.assertCategoryExists(dto.categoryId);
     }
@@ -109,8 +113,8 @@ export class ProductsService {
   }
 
   /** Reposição de estoque: entram `units` embalagens de `quantityPerUnit`. */
-  async restock(id: string, units: number) {
-    const product = await this.findOne(id);
+  async restock(id: string, units: number, user: AuthUser) {
+    const product = await this.findOne(id, user);
 
     const added = product.quantityPerUnit.mul(units);
     const usableQuantity = product.usableQuantity.plus(added);
@@ -125,8 +129,8 @@ export class ProductsService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: AuthUser) {
+    await this.findOne(id, user);
     await this.prisma.product.delete({ where: { id } });
     return { deleted: true, id };
   }

@@ -22,7 +22,7 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 
 @ApiTags('evaluations')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.STAFF)
 @UseGuards(RolesGuard)
 @Controller('evaluations')
 export class EvaluationsController {

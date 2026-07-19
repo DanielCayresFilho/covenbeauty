@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { CreateProcedureDto } from './dto/create-procedure.dto';
 import { UpdateProcedureDto } from './dto/update-procedure.dto';
 import { QueryProceduresDto } from './dto/query-procedures.dto';
@@ -13,7 +15,7 @@ import { QueryProceduresDto } from './dto/query-procedures.dto';
 export class ProceduresService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProcedureDto) {
+  async create(dto: CreateProcedureDto, ownerId: string) {
     await this.assertCategoryExists(dto.categoryId);
 
     return this.prisma.procedure.create({
@@ -23,15 +25,17 @@ export class ProceduresService {
         categoryId: dto.categoryId,
         durationMinutes: dto.durationMinutes,
         price: new Prisma.Decimal(dto.price),
+        ownerId,
       },
       include: { category: true },
     });
   }
 
-  async findAll(query: QueryProceduresDto) {
+  async findAll(query: QueryProceduresDto, user: AuthUser) {
     const { search, categoryId, page, limit } = query;
 
     const where: Prisma.ProcedureWhereInput = {
+      ...ownerWhere(user),
       ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
       ...(categoryId ? { categoryId } : {}),
     };
@@ -53,9 +57,9 @@ export class ProceduresService {
     };
   }
 
-  async findOne(id: string) {
-    const procedure = await this.prisma.procedure.findUnique({
-      where: { id },
+  async findOne(id: string, user: AuthUser) {
+    const procedure = await this.prisma.procedure.findFirst({
+      where: { id, ...ownerWhere(user) },
       include: { category: true },
     });
     if (!procedure) {
@@ -64,8 +68,8 @@ export class ProceduresService {
     return procedure;
   }
 
-  async update(id: string, dto: UpdateProcedureDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateProcedureDto, user: AuthUser) {
+    await this.findOne(id, user);
     if (dto.categoryId) {
       await this.assertCategoryExists(dto.categoryId);
     }
@@ -84,8 +88,8 @@ export class ProceduresService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: AuthUser) {
+    await this.findOne(id, user);
     await this.prisma.procedure.delete({ where: { id } });
     return { deleted: true, id };
   }

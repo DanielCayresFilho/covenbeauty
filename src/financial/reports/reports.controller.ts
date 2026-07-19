@@ -4,34 +4,39 @@ import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service';
 import { IncomeReportQuery } from './dto/income-report.query';
 import { CashFlowQuery } from './dto/cash-flow.query';
+import { AuthUser, CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 
 @ApiTags('financial-reports')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.STAFF)
 @UseGuards(RolesGuard)
 @Controller('financial/reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('income')
-  @ApiOperation({ summary: '[ADMIN] Entradas por dia/semana/mês' })
-  income(@Query() query: IncomeReportQuery) {
-    return this.reports.incomeByPeriod(query);
+  @ApiOperation({ summary: 'Entradas por dia/semana/mês' })
+  income(@Query() query: IncomeReportQuery, @CurrentUser() user: AuthUser) {
+    return this.reports.incomeByPeriod(query, user);
   }
 
   @Get('summary')
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
-  @ApiOperation({ summary: '[ADMIN] Resumo do período (entradas, saídas, lucro)' })
-  summary(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.reports.summary(from, to);
+  @ApiOperation({ summary: 'Resumo do período (entradas, saídas, lucro)' })
+  summary(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.reports.summary(user, from, to);
   }
 
   @Get('cash-flow')
-  @ApiOperation({ summary: '[ADMIN] Fluxo de caixa mensal do ano' })
-  cashFlow(@Query() query: CashFlowQuery) {
-    return this.reports.cashFlow(query);
+  @ApiOperation({ summary: 'Fluxo de caixa mensal do ano' })
+  cashFlow(@Query() query: CashFlowQuery, @CurrentUser() user: AuthUser) {
+    return this.reports.cashFlow(query, user);
   }
 }

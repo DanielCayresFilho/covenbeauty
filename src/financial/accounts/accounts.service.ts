@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { CashFlowCategory, Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 
@@ -12,37 +14,39 @@ import { UpdateAccountDto } from './dto/update-account.dto';
 export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateAccountDto) {
+  create(dto: CreateAccountDto, ownerId: string) {
     return this.prisma.financialAccount.create({
-      data: { name: dto.name.trim(), category: dto.category },
+      data: { name: dto.name.trim(), category: dto.category, ownerId },
     });
   }
 
-  findAll(category?: CashFlowCategory) {
+  findAll(user: AuthUser, category?: CashFlowCategory) {
     return this.prisma.financialAccount.findMany({
-      where: category ? { category } : {},
+      where: { ...ownerWhere(user), ...(category ? { category } : {}) },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });
   }
 
-  async findOne(id: string) {
-    const account = await this.prisma.financialAccount.findUnique({ where: { id } });
+  async findOne(id: string, user: AuthUser) {
+    const account = await this.prisma.financialAccount.findFirst({
+      where: { id, ...ownerWhere(user) },
+    });
     if (!account) {
       throw new NotFoundException('Conta não encontrada');
     }
     return account;
   }
 
-  async update(id: string, dto: UpdateAccountDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateAccountDto, user: AuthUser) {
+    await this.findOne(id, user);
     return this.prisma.financialAccount.update({
       where: { id },
       data: { name: dto.name?.trim(), isActive: dto.isActive },
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: AuthUser) {
+    await this.findOne(id, user);
     try {
       await this.prisma.financialAccount.delete({ where: { id } });
       return { deleted: true, id };
@@ -63,10 +67,10 @@ export class AccountsService {
    * Traz os procedimentos para o plano de contas como contas de entrada
    * (uma conta INCOME por procedimento que ainda não tenha).
    */
-  async syncProcedures() {
+  async syncProcedures(user: AuthUser) {
     const procedures = await this.prisma.procedure.findMany({
-      where: { isActive: true, financialAccount: null },
-      select: { id: true, name: true },
+      where: { isActive: true, financialAccount: null, ...ownerWhere(user) },
+      select: { id: true, name: true, ownerId: true },
     });
 
     if (procedures.length === 0) {
@@ -78,6 +82,7 @@ export class AccountsService {
         name: p.name,
         category: CashFlowCategory.INCOME,
         procedureId: p.id,
+        ownerId: p.ownerId ?? user.id, // conta de entrada pertence ao dono do procedimento
       })),
     });
 

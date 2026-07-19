@@ -18,7 +18,11 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import luxon3Plugin from "@fullcalendar/luxon3";
 import ptBrLocale from "@fullcalendar/core/locales/pt-br";
-import type { EventClickArg, DatesSetArg } from "@fullcalendar/core";
+import type {
+  EventClickArg,
+  DatesSetArg,
+  EventContentArg,
+} from "@fullcalendar/core";
 
 import { AppShell } from "@/components/app-shell";
 import { AppointmentForm, type EditAppt } from "@/components/agenda/appointment-form";
@@ -51,6 +55,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +112,24 @@ const apptColor = (a: Appt) =>
   a.type === "BLOCK" ? BLOCK_COLOR : (STATUS_COLOR[a.status] ?? BLOCK_COLOR);
 const apptTitle = (a: Appt) =>
   a.type === "BLOCK" ? a.notes || "Bloqueio" : (a.client?.fullName ?? "Cliente");
+const apptProcedures = (a: Appt) =>
+  a.procedures.map((p) => p.nameSnapshot).join(", ");
+
+/** Conteúdo de cada evento: cliente + profissional + procedimento, bem claro. */
+function renderEventContent(arg: EventContentArg) {
+  const a = arg.event.extendedProps.appt as Appt;
+  const procs = apptProcedures(a);
+  return (
+    <div className="fc-cb-event">
+      <div className="fc-cb-time">{arg.timeText}</div>
+      <div className="fc-cb-name">{apptTitle(a)}</div>
+      {a.type !== "BLOCK" && a.professional && (
+        <div className="fc-cb-sub">✦ {a.professional.fullName}</div>
+      )}
+      {a.type !== "BLOCK" && procs && <div className="fc-cb-sub">{procs}</div>}
+    </div>
+  );
+}
 
 function AgendaPage() {
   return (
@@ -281,6 +304,7 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
           slotDuration="00:30:00"
           expandRows
           events={events}
+          eventContent={renderEventContent}
           eventClick={(arg: EventClickArg) =>
             onSelect(arg.event.extendedProps.appt as Appt)
           }
@@ -371,10 +395,15 @@ function ListView({ onSelect }: { onSelect: (a: Appt) => void }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-parchment">{apptTitle(a)}</p>
+                    {a.type !== "BLOCK" && a.professional && (
+                      <p className="truncate text-xs font-medium text-blood">
+                        ✦ {a.professional.fullName}
+                      </p>
+                    )}
                     <p className="truncate text-xs text-muted-foreground">
                       {a.type === "BLOCK"
                         ? "Bloqueio"
-                        : a.procedures.map((p) => p.nameSnapshot).join(", ") || "—"}
+                        : apptProcedures(a) || "—"}
                     </p>
                   </div>
                 </Card>

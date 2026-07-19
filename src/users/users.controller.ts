@@ -36,9 +36,9 @@ export class UsersController {
   }
 
   @Get('professionals')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.STAFF)
   @UseGuards(RolesGuard)
-  @ApiOperation({ summary: '[ADMIN] Lista profissionais ativos (para a agenda)' })
+  @ApiOperation({ summary: 'Lista profissionais ativos (para a agenda)' })
   professionals() {
     return this.users.listProfessionals();
   }

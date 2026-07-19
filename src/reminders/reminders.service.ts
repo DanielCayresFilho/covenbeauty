@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Reminder, ReminderType } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { CreateReminderDto } from './dto/create-reminder.dto';
 import { UpdateReminderDto } from './dto/update-reminder.dto';
 import { QueryRemindersDto } from './dto/query-reminders.dto';
@@ -26,17 +28,19 @@ export class RemindersService {
         dueDate: new Date(dto.dueDate),
         priority: dto.priority,
         createdById,
+        ownerId: createdById, // lembrete pertence a quem o criou
       },
       include: REMINDER_INCLUDE,
     });
     return this.decorate(reminder);
   }
 
-  async findAll(query: QueryRemindersDto) {
+  async findAll(query: QueryRemindersDto, user: AuthUser) {
     const { status, type, priority, from, to, page, limit } = query;
     const now = new Date();
 
     const where: Prisma.ReminderWhereInput = {
+      ...ownerWhere(user),
       ...(type ? { type } : {}),
       ...(priority ? { priority } : {}),
       ...(from || to
@@ -71,9 +75,9 @@ export class RemindersService {
     };
   }
 
-  async findOne(id: string) {
-    const reminder = await this.prisma.reminder.findUnique({
-      where: { id },
+  async findOne(id: string, user: AuthUser) {
+    const reminder = await this.prisma.reminder.findFirst({
+      where: { id, ...ownerWhere(user) },
       include: REMINDER_INCLUDE,
     });
     if (!reminder) {
@@ -82,8 +86,8 @@ export class RemindersService {
     return this.decorate(reminder);
   }
 
-  async update(id: string, dto: UpdateReminderDto) {
-    await this.ensureExists(id);
+  async update(id: string, dto: UpdateReminderDto, user: AuthUser) {
+    await this.ensureExists(id, user);
     const reminder = await this.prisma.reminder.update({
       where: { id },
       data: {
@@ -97,8 +101,8 @@ export class RemindersService {
     return this.decorate(reminder);
   }
 
-  async complete(id: string) {
-    const current = await this.ensureExists(id);
+  async complete(id: string, user: AuthUser) {
+    const current = await this.ensureExists(id, user);
     const reminder = current.completedAt
       ? await this.prisma.reminder.findUniqueOrThrow({
           where: { id },
@@ -112,8 +116,8 @@ export class RemindersService {
     return this.decorate(reminder);
   }
 
-  async reopen(id: string) {
-    await this.ensureExists(id);
+  async reopen(id: string, user: AuthUser) {
+    await this.ensureExists(id, user);
     const reminder = await this.prisma.reminder.update({
       where: { id },
       data: { completedAt: null },
@@ -122,8 +126,8 @@ export class RemindersService {
     return this.decorate(reminder);
   }
 
-  async remove(id: string) {
-    await this.ensureExists(id);
+  async remove(id: string, user: AuthUser) {
+    await this.ensureExists(id, user);
     await this.prisma.reminder.delete({ where: { id } });
     return { deleted: true, id };
   }
@@ -139,7 +143,7 @@ export class RemindersService {
 
     const clients = await this.prisma.client.findMany({
       where: { isActive: true },
-      select: { id: true, fullName: true, birthDate: true },
+      select: { id: true, fullName: true, birthDate: true, ownerId: true },
     });
 
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -151,6 +155,7 @@ export class RemindersService {
         return {
           type: ReminderType.CLIENT_BIRTHDAY,
           clientId: c.id,
+          ownerId: c.ownerId, // o lembrete de aniversário é do dono do cliente
           title: `Aniversário de ${c.fullName}`,
           description: 'Enviar mensagem de aniversário para o cliente 🎂',
           dueDate: new Date(Date.UTC(year, month - 1, day)),
@@ -174,8 +179,10 @@ export class RemindersService {
     };
   }
 
-  private async ensureExists(id: string): Promise<Reminder> {
-    const reminder = await this.prisma.reminder.findUnique({ where: { id } });
+  private async ensureExists(id: string, user: AuthUser): Promise<Reminder> {
+    const reminder = await this.prisma.reminder.findFirst({
+      where: { id, ...ownerWhere(user) },
+    });
     if (!reminder) {
       throw new NotFoundException('Lembrete não encontrado');
     }

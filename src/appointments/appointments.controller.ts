@@ -24,7 +24,7 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 
 @ApiTags('appointments')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.STAFF)
 @UseGuards(RolesGuard)
 @Controller('appointments')
 export class AppointmentsController {

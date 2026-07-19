@@ -36,7 +36,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch, ApiError } from "@/lib/api";
+import { getStoredUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/menu/clientes/")({
   component: ClientesPage,
@@ -50,10 +58,27 @@ interface Client {
   email: string | null;
   address: string | null;
   notes: string | null;
+  ownerId: string | null;
+}
+interface Professional {
+  id: string;
+  fullName: string;
 }
 interface Paginated<T> {
   data: T[];
   meta: { total: number; page: number; pages: number };
+}
+
+/** Lista de profissionais + mapa id→nome. Só o admin precisa (vê de todos). */
+function useProfessionals(enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["professionals"],
+    queryFn: () => apiFetch<Professional[]>("/users/professionals"),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+  const byId = new Map((query.data ?? []).map((p) => [p.id, p.fullName]));
+  return { list: query.data ?? [], byId };
 }
 
 function useDebounce<T>(value: T, delay = 300): T {
@@ -79,6 +104,10 @@ function Clientes() {
   const debounced = useDebounce(search);
   // "new" = criar, Client = editar, null = fechado
   const [sheet, setSheet] = useState<Client | "new" | null>(null);
+
+  const me = getStoredUser();
+  const isAdmin = me?.role === "ADMIN";
+  const { byId: proById } = useProfessionals(isAdmin);
 
   useEffect(() => setPage(1), [debounced]);
 
@@ -146,6 +175,11 @@ function Clientes() {
                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                     <Phone className="h-3 w-3" /> {c.phone}
                   </p>
+                  {isAdmin && c.ownerId && (
+                    <p className="truncate text-xs font-medium text-blood">
+                      ✦ {proById.get(c.ownerId) ?? "Profissional"}
+                    </p>
+                  )}
                 </div>
               </Card>
             </button>
@@ -214,6 +248,11 @@ function ClientSheet({
   const navigate = useNavigate();
   const isEdit = !!client;
 
+  const me = getStoredUser();
+  const isAdmin = me?.role === "ADMIN";
+  const { list: professionals } = useProfessionals(isAdmin);
+  const [ownerId, setOwnerId] = useState<string>("");
+
   const {
     register,
     handleSubmit,
@@ -232,7 +271,8 @@ function ClientSheet({
       address: client?.address ?? "",
       notes: client?.notes ?? "",
     });
-  }, [open, client, reset]);
+    setOwnerId(client?.ownerId ?? me?.id ?? "");
+  }, [open, client, reset, me?.id]);
 
   const save = useMutation({
     mutationFn: (values: z.output<typeof schema>) => {
@@ -241,6 +281,8 @@ function ClientSheet({
         email: values.email || undefined,
         address: values.address || undefined,
         notes: values.notes || undefined,
+        // Só o admin atribui o dono; o backend ignora para os demais.
+        ownerId: isAdmin && ownerId ? ownerId : undefined,
       });
       return isEdit
         ? apiFetch(`/clients/${client!.id}`, { method: "PATCH", body })
@@ -306,6 +348,23 @@ function ClientSheet({
           <Field label="Observação (opcional)" error={errors.notes?.message}>
             <Textarea rows={3} {...register("notes")} />
           </Field>
+
+          {isAdmin && professionals.length > 0 && (
+            <Field label="Profissional responsável">
+              <Select value={ownerId} onValueChange={setOwnerId}>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Selecione o profissional" />
+                </SelectTrigger>
+                <SelectContent>
+                  {professionals.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
 
           <SheetFooter className="flex-col gap-2 px-0 sm:flex-col">
             <Button

@@ -19,7 +19,7 @@ import { RolesGuard } from '@/auth/guards/roles.guard';
 
 @ApiTags('categories')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.STAFF)
 @UseGuards(RolesGuard)
 @Controller('categories')
 export class CategoriesController {

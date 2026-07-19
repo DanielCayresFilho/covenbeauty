@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -46,4 +47,12 @@ export class CreateClientDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Profissional dono do cliente. Só o admin pode atribuir; ignorado para os demais (assume o próprio).',
+  })
+  @IsOptional()
+  @IsUUID()
+  ownerId?: string;
 }

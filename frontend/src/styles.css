@@ -194,6 +194,24 @@
 .fc .fc-event-title { font-weight: 500; }
 .fc .fc-col-header-cell-cushion { padding: 6px 0; }
 
+/* Conteúdo custom do evento: cliente + profissional + procedimento. */
+.fc-cb-event { overflow: hidden; line-height: 1.15; }
+.fc-cb-event .fc-cb-time { font-weight: 700; font-size: 0.72rem; opacity: 0.95; }
+.fc-cb-event .fc-cb-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-cb-event .fc-cb-sub {
+  font-size: 0.68rem;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── CRM: fontes um pouco maiores (mais legíveis) — escopado, não afeta a landing ── */
 .crm-ui .text-xs { font-size: 0.82rem; line-height: 1.15rem; }
 .crm-ui .text-sm { font-size: 0.95rem; line-height: 1.4rem; }

@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { CashFlowCategory, Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
+import { ownerWhere } from '@/common/ownership';
 import { BELOW_LINE_CATEGORIES } from '../financial.constants';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
@@ -14,13 +16,13 @@ import { QueryEntriesDto } from './dto/query-entries.dto';
 export class EntriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateEntryDto, createdById?: string) {
+  async create(dto: CreateEntryDto, user: AuthUser) {
     let category: CashFlowCategory;
 
     if (dto.accountId) {
-      // Lançamento por conta: a categoria vem da conta.
-      const account = await this.prisma.financialAccount.findUnique({
-        where: { id: dto.accountId },
+      // Lançamento por conta: a categoria vem da conta (do próprio profissional).
+      const account = await this.prisma.financialAccount.findFirst({
+        where: { id: dto.accountId, ...ownerWhere(user) },
       });
       if (!account) {
         throw new BadRequestException('Conta informada não existe');
@@ -43,16 +45,18 @@ export class EntriesService {
         amount: new Prisma.Decimal(dto.amount),
         accountId: dto.accountId,
         description: dto.description,
-        createdById,
+        createdById: user.id,
+        ownerId: user.id,
       },
       include: { account: true },
     });
   }
 
-  async findAll(query: QueryEntriesDto) {
+  async findAll(query: QueryEntriesDto, user: AuthUser) {
     const { category, accountId, from, to, page, limit } = query;
 
     const where: Prisma.FinancialEntryWhereInput = {
+      ...ownerWhere(user),
       ...(category ? { category } : {}),
       ...(accountId ? { accountId } : {}),
       ...(from || to
@@ -79,9 +83,9 @@ export class EntriesService {
     return { data, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
   }
 
-  async findOne(id: string) {
-    const entry = await this.prisma.financialEntry.findUnique({
-      where: { id },
+  async findOne(id: string, user: AuthUser) {
+    const entry = await this.prisma.financialEntry.findFirst({
+      where: { id, ...ownerWhere(user) },
       include: { account: true },
     });
     if (!entry) {
@@ -90,8 +94,8 @@ export class EntriesService {
     return entry;
   }
 
-  async update(id: string, dto: UpdateEntryDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateEntryDto, user: AuthUser) {
+    await this.findOne(id, user);
     return this.prisma.financialEntry.update({
       where: { id },
       data: {
@@ -103,8 +107,8 @@ export class EntriesService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: AuthUser) {
+    await this.findOne(id, user);
     await this.prisma.financialEntry.delete({ where: { id } });
     return { deleted: true, id };
   }
