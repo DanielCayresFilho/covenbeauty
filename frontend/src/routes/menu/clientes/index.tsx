@@ -105,10 +105,6 @@ function Clientes() {
   // "new" = criar, Client = editar, null = fechado
   const [sheet, setSheet] = useState<Client | "new" | null>(null);
 
-  const me = getStoredUser();
-  const isAdmin = me?.role === "ADMIN";
-  const { byId: proById } = useProfessionals(isAdmin);
-
   useEffect(() => setPage(1), [debounced]);
 
   const query = useQuery({
@@ -175,11 +171,6 @@ function Clientes() {
                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                     <Phone className="h-3 w-3" /> {c.phone}
                   </p>
-                  {isAdmin && c.ownerId && (
-                    <p className="truncate text-xs font-medium text-blood">
-                      ✦ {proById.get(c.ownerId) ?? "Profissional"}
-                    </p>
-                  )}
                 </div>
               </Card>
             </button>

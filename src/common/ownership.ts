@@ -3,31 +3,28 @@ import type { AuthUser } from '@/auth/decorators/current-user.decorator';
 /**
  * Escopo de propriedade por profissional.
  *
- * Regra: o ADMIN (dona do salão) enxerga tudo; os demais profissionais só
- * enxergam o que é deles (owner_id = seu id). Registros sem dono (owner_id
- * nulo, ex.: dados antigos) ficam visíveis apenas para o admin.
+ * Regra: CADA profissional (inclusive o admin) só enxerga o que é dele
+ * (owner_id = seu id). A agenda/comandas continuam compartilhadas — só as
+ * métricas, o financeiro, os lembretes e os catálogos são por profissional.
+ * O histórico antigo (owner_id nulo) é atribuído ao admin numa migração.
  */
 export function isAdmin(user: Pick<AuthUser, 'role'>): boolean {
   return user.role === 'ADMIN';
 }
 
-/** Cláusula `where` de propriedade — vazia para admin, `{ ownerId }` p/ os demais. */
-export function ownerWhere(user: AuthUser): { ownerId?: string } {
-  return isAdmin(user) ? {} : { ownerId: user.id };
+/** Cláusula `where` de propriedade — sempre restrita ao próprio usuário. */
+export function ownerWhere(user: AuthUser): { ownerId: string } {
+  return { ownerId: user.id };
 }
 
-/**
- * Escopo por profissional que ATENDE (agenda/analytics). A agenda em si é
- * compartilhada, mas as métricas do início são por profissional.
- * Admin → sem filtro; demais → só o que eles atendem.
- */
-export function professionalWhere(user: AuthUser): { professionalId?: string } {
-  return isAdmin(user) ? {} : { professionalId: user.id };
+/** Escopo por profissional que ATENDE (métricas do início). */
+export function professionalWhere(user: AuthUser): { professionalId: string } {
+  return { professionalId: user.id };
 }
 
 /** Escopo de comandas por profissional (via o agendamento). */
 export function comandaOwnerWhere(
   user: AuthUser,
-): { appointment?: { professionalId: string } } {
-  return isAdmin(user) ? {} : { appointment: { professionalId: user.id } };
+): { appointment: { professionalId: string } } {
+  return { appointment: { professionalId: user.id } };
 }

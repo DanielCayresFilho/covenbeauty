@@ -44,7 +44,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { apiFetch, ApiError } from "@/lib/api";
-import { getStoredUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/menu/procedimentos/")({
   component: ProcedimentosPage,
@@ -104,8 +103,6 @@ function Procedimentos() {
   const [sheet, setSheet] = useState<Procedure | "new" | null>(null);
   const [catsOpen, setCatsOpen] = useState(false);
 
-  const isAdmin = getStoredUser()?.role === "ADMIN";
-
   useEffect(() => setPage(1), [debounced]);
 
   const categories = useQuery({
@@ -113,16 +110,6 @@ function Procedimentos() {
     queryFn: () => apiFetch<Category[]>("/procedure-categories"),
     retry: false,
   });
-
-  const professionals = useQuery({
-    queryKey: ["professionals"],
-    queryFn: () => apiFetch<{ id: string; fullName: string }[]>("/users/professionals"),
-    enabled: isAdmin,
-    staleTime: 5 * 60 * 1000,
-  });
-  const proById = new Map(
-    (professionals.data ?? []).map((p) => [p.id, p.fullName]),
-  );
 
   const query = useQuery({
     queryKey: ["procedures", debounced, page],
@@ -189,11 +176,6 @@ function Procedimentos() {
                     <p className="truncate text-xs text-muted-foreground">
                       {p.category.name}
                     </p>
-                    {isAdmin && p.ownerId && (
-                      <p className="truncate text-xs font-medium text-blood">
-                        ✦ {proById.get(p.ownerId) ?? "Profissional"}
-                      </p>
-                    )}
                   </div>
                   <span className="shrink-0 text-sm text-parchment">{brl(p.price)}</span>
                 </div>

@@ -101,10 +101,10 @@ function Dashboard() {
     staleTime: 30_000,
   });
 
-  // No início, o profissional vê a agenda DELE; o admin vê a de todos.
-  const isAdmin = user?.role === "ADMIN";
+  // No início cada profissional vê a agenda DELE (a agenda completa/compartilhada
+  // fica na página "Agenda").
   const todayAppts = (agenda.data?.data ?? []).filter(
-    (a) => isAdmin || a.professional?.id === user?.id,
+    (a) => a.professional?.id === user?.id,
   );
 
   const reminders = useQuery({
