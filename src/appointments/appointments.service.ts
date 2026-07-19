@@ -42,6 +42,7 @@ const APPOINTMENT_INCLUDE = {
   professional: { select: { id: true, fullName: true } },
   client: { select: { id: true, fullName: true, phone: true } },
   procedures: true,
+  comanda: { select: { id: true, status: true } },
 } satisfies Prisma.AppointmentInclude;
 
 @Injectable()

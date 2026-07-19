@@ -103,7 +103,7 @@ export function AppointmentForm({
   const procedures = useQuery({
     queryKey: ["procedures", "all"],
     queryFn: () =>
-      apiFetch<{ data: ProcedureItem[] }>("/procedures?limit=200"),
+      apiFetch<{ data: ProcedureItem[] }>("/procedures?limit=100"),
     retry: false,
     enabled: open && type === "APPOINTMENT",
   });

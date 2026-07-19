@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Users,
   CalendarCheck,
@@ -9,6 +10,7 @@ import {
   Clock,
   AlertTriangle,
   Cake,
+  Check,
   UserPlus,
   CalendarDays,
   Receipt,
@@ -20,7 +22,7 @@ import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/menu/")({
@@ -45,6 +47,7 @@ interface ApptItem {
   client: { fullName: string } | null;
   professional: { fullName: string } | null;
   procedures: { nameSnapshot: string }[];
+  comanda: { id: string; status: string } | null;
 }
 interface ReminderItem {
   id: string;
@@ -104,6 +107,34 @@ function Dashboard() {
       apiFetch<Paginated<ReminderItem>>("/reminders?status=pending&limit=20"),
     retry: false,
     staleTime: 30_000,
+  });
+
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  // Abre (ou vai para) a comanda do agendamento e leva pro fluxo completo.
+  const openComanda = useMutation({
+    mutationFn: (a: ApptItem) => {
+      if (a.comanda) return Promise.resolve({ id: a.comanda.id });
+      return apiFetch<{ id: string }>("/comandas", {
+        method: "POST",
+        body: JSON.stringify({ appointmentId: a.id }),
+      });
+    },
+    onSuccess: (c) =>
+      navigate({ to: "/menu/comandas/$id", params: { id: c.id } }),
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível abrir a comanda"),
+  });
+
+  const completeReminder = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/reminders/${id}/complete`, { method: "POST" }),
+    onSuccess: () => {
+      toast.success("Lembrete concluído ✦");
+      void qc.invalidateQueries({ queryKey: ["reminders"] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Falha"),
   });
 
   return (
@@ -178,31 +209,54 @@ function Dashboard() {
           <Empty>Nenhum atendimento para hoje.</Empty>
         ) : (
           <div className="space-y-2">
-            {agenda.data!.data.map((a) => (
-              <Card
-                key={a.id}
-                className="flex items-center gap-3 border-border bg-card/60 p-3"
-              >
-                <div className="flex flex-col items-center rounded-md bg-secondary px-2.5 py-1.5">
-                  <span className="text-sm font-medium text-parchment">
-                    {format(new Date(a.startTime), "HH:mm")}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-parchment">
-                    {a.type === "BLOCK"
-                      ? "Bloqueio de agenda"
-                      : (a.client?.fullName ?? "Cliente")}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {a.procedures.map((p) => p.nameSnapshot).join(", ") ||
-                      a.professional?.fullName ||
-                      "—"}
-                  </p>
-                </div>
-                <StatusBadge status={a.status} />
-              </Card>
-            ))}
+            {agenda.data!.data.map((a) => {
+              const isAppt = a.type === "APPOINTMENT";
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={!isAppt || openComanda.isPending}
+                  onClick={() => isAppt && openComanda.mutate(a)}
+                  className="w-full text-left"
+                >
+                  <Card
+                    className={cn(
+                      "flex items-center gap-3 border-border bg-card/60 p-3",
+                      isAppt && "transition-colors hover:border-primary",
+                    )}
+                  >
+                    <div className="flex flex-col items-center rounded-md bg-secondary px-2.5 py-1.5">
+                      <span className="text-sm font-medium text-parchment">
+                        {format(new Date(a.startTime), "HH:mm")}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-parchment">
+                        {a.type === "BLOCK"
+                          ? "Bloqueio de agenda"
+                          : (a.client?.fullName ?? "Cliente")}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {isAppt && a.comanda ? (
+                          <span className="text-emerald-400">
+                            {a.comanda.status === "OPEN"
+                              ? "comanda aberta →"
+                              : "comanda fechada →"}
+                          </span>
+                        ) : isAppt ? (
+                          <span className="text-primary">abrir comanda →</span>
+                        ) : (
+                          a.procedures.map((p) => p.nameSnapshot).join(", ") ||
+                          a.professional?.fullName ||
+                          "—"
+                        )}
+                      </p>
+                    </div>
+                    <StatusBadge status={a.status} />
+                  </Card>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>
@@ -248,6 +302,15 @@ function Dashboard() {
                     )}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => completeReminder.mutate(r.id)}
+                  disabled={completeReminder.isPending}
+                  title="Concluir"
+                  className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-emerald-400"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
               </Card>
             ))}
           </div>

@@ -193,3 +193,8 @@
 .fc .fc-event-time { font-weight: 700; opacity: 0.95; }
 .fc .fc-event-title { font-weight: 500; }
 .fc .fc-col-header-cell-cushion { padding: 6px 0; }
+
+/* ── CRM: fontes um pouco maiores (mais legíveis) — escopado, não afeta a landing ── */
+.crm-ui .text-xs { font-size: 0.82rem; line-height: 1.15rem; }
+.crm-ui .text-sm { font-size: 0.95rem; line-height: 1.4rem; }
+.crm-ui .text-base { font-size: 1.05rem; line-height: 1.6rem; }

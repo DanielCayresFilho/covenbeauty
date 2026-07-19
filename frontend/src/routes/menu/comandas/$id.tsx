@@ -243,7 +243,7 @@ function AddProcedure({ comandaId, onDone }: { comandaId: string; onDone: () => 
   const list = useQuery({
     queryKey: ["procedures", "all"],
     queryFn: () =>
-      apiFetch<{ data: { id: string; name: string }[] }>("/procedures?limit=200"),
+      apiFetch<{ data: { id: string; name: string }[] }>("/procedures?limit=100"),
     retry: false,
   });
   const add = useMutation({
@@ -296,7 +296,7 @@ function AddProduct({ comandaId, onDone }: { comandaId: string; onDone: () => vo
     queryKey: ["products", "all"],
     queryFn: () =>
       apiFetch<{ data: { id: string; name: string; measureUnit: string; usableQuantity: string }[] }>(
-        "/products?limit=200",
+        "/products?limit=100",
       ),
     retry: false,
   });

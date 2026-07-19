@@ -144,15 +144,12 @@ export function CashFlowTab() {
             </thead>
             <tbody>
               {ROWS.map((row) => {
-                const rowBg =
-                  row.emphasis === "profit"
-                    ? "bg-primary/10"
-                    : row.emphasis === "balance"
-                      ? "bg-secondary/50"
-                      : "";
+                // Fundos SÓLIDOS (a 1ª coluna é fixa; transparência vazaria ao rolar).
+                const stickyBg = row.emphasis ? "bg-secondary" : "bg-card";
+                const rowBg = row.emphasis ? "bg-secondary" : "bg-background";
                 const valCls =
                   row.emphasis === "profit"
-                    ? "font-semibold text-foreground"
+                    ? "font-semibold text-primary"
                     : row.emphasis === "balance"
                       ? "font-semibold text-foreground"
                       : "text-foreground/90";
@@ -161,7 +158,7 @@ export function CashFlowTab() {
                     <td
                       className={cn(
                         "sticky left-0 z-10 px-3 py-2.5 text-left",
-                        rowBg || "bg-card",
+                        stickyBg,
                         row.indent ? "pl-6 text-muted-foreground" : "text-foreground",
                         row.emphasis && "font-semibold",
                       )}
@@ -173,7 +170,7 @@ export function CashFlowTab() {
                         {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
                       </td>
                     ))}
-                    <td className={cn("bg-primary/10 px-3 py-2.5 font-medium", valCls)}>
+                    <td className={cn("px-3 py-2.5 font-medium", valCls)}>
                       {row.key === "saldoInicial"
                         ? "—"
                         : fmtCell(

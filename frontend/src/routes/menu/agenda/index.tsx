@@ -71,6 +71,7 @@ interface Appt {
   client: { id?: string; fullName: string; phone?: string } | null;
   professional: { id?: string; fullName: string } | null;
   procedures: { procedureId?: string; nameSnapshot: string }[];
+  comanda?: { id: string; status: string } | null;
 }
 interface Paginated<T> {
   data: T[];
@@ -403,11 +404,13 @@ function AppointmentSheet({
   const isAppt = appt?.type === "APPOINTMENT";
 
   const openComanda = useMutation({
-    mutationFn: () =>
-      apiFetch<{ id: string }>("/comandas", {
+    mutationFn: () => {
+      if (appt!.comanda) return Promise.resolve({ id: appt!.comanda.id });
+      return apiFetch<{ id: string }>("/comandas", {
         method: "POST",
         body: JSON.stringify({ appointmentId: appt!.id }),
-      }),
+      });
+    },
     onSuccess: (c) => {
       void navigate({ to: "/menu/comandas/$id", params: { id: c.id } });
     },
@@ -544,7 +547,11 @@ function AppointmentSheet({
                   disabled={openComanda.isPending}
                   onClick={() => openComanda.mutate()}
                 >
-                  {openComanda.isPending ? "Abrindo..." : "Abrir comanda"}
+                  {openComanda.isPending
+                    ? "Abrindo..."
+                    : appt.comanda
+                      ? "Ver comanda"
+                      : "Abrir comanda"}
                 </Button>
               )}
 
