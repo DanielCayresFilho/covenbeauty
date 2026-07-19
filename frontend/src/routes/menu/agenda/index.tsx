@@ -200,13 +200,13 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
   const calRef = useRef<FullCalendar>(null);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [title, setTitle] = useState("");
-  const [view, setView] = useState<"timeGridDay" | "timeGridWeek">("timeGridDay");
+  const [view, setView] = useState<"timeGridDay" | "timeGridWeek">("timeGridWeek");
 
   const query = useQuery({
     queryKey: ["appointments", range?.from, range?.to],
     queryFn: () =>
       apiFetch<Paginated<Appt>>(
-        `/appointments?from=${range!.from}&to=${range!.to}&limit=300`,
+        `/appointments?from=${range!.from}&to=${range!.to}&limit=200`,
       ),
     enabled: !!range,
     retry: false,
@@ -269,7 +269,7 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
           ref={calRef}
           plugins={[timeGridPlugin, interactionPlugin, luxon3Plugin]}
           timeZone={TZ}
-          initialView="timeGridDay"
+          initialView="timeGridWeek"
           locale={ptBrLocale}
           headerToolbar={false}
           allDaySlot={false}
@@ -307,7 +307,7 @@ function ListView({ onSelect }: { onSelect: (a: Appt) => void }) {
     queryKey: ["appointments", "list", range.from, range.to],
     queryFn: () =>
       apiFetch<Paginated<Appt>>(
-        `/appointments?from=${range.from}&to=${range.to}&limit=300`,
+        `/appointments?from=${range.from}&to=${range.to}&limit=200`,
       ),
     retry: false,
   });

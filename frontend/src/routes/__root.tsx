@@ -115,6 +115,13 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="pt-BR">
       <head>
         <HeadContent />
+        {/* Aplica o tema salvo antes da pintura (evita flash). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('cb_theme')==='light')document.documentElement.classList.add('light')}catch(e){}",
+          }}
+        />
       </head>
       <body>
         {children}

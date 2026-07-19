@@ -126,45 +126,54 @@ export function CashFlowTab() {
         </Card>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full border-collapse text-right text-xs">
+          <table className="w-full border-collapse text-right text-[0.82rem]">
             <thead>
-              <tr className="bg-secondary/60">
-                <th className="sticky left-0 z-10 min-w-40 bg-secondary px-3 py-2 text-left font-medium text-muted-foreground">
+              <tr className="bg-secondary">
+                <th className="sticky left-0 z-10 min-w-44 bg-secondary px-3 py-2.5 text-left font-semibold text-foreground">
                   Linha
                 </th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-20 px-3 py-2 font-medium text-muted-foreground">
+                  <th key={m} className="min-w-[5.5rem] px-3 py-2.5 font-semibold text-muted-foreground">
                     {m}
                   </th>
                 ))}
-                <th className="min-w-24 px-3 py-2 font-medium text-blood">Total</th>
+                <th className="min-w-24 bg-primary/15 px-3 py-2.5 font-semibold text-primary">
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
               {ROWS.map((row) => {
-                const emph =
+                const rowBg =
                   row.emphasis === "profit"
-                    ? "text-parchment font-medium"
+                    ? "bg-primary/10"
                     : row.emphasis === "balance"
-                      ? "text-parchment font-semibold"
-                      : "text-parchment/80";
+                      ? "bg-secondary/50"
+                      : "";
+                const valCls =
+                  row.emphasis === "profit"
+                    ? "font-semibold text-foreground"
+                    : row.emphasis === "balance"
+                      ? "font-semibold text-foreground"
+                      : "text-foreground/90";
                 return (
-                  <tr key={row.key} className="border-t border-border">
+                  <tr key={row.key} className={cn("border-t border-border", rowBg)}>
                     <td
                       className={cn(
-                        "sticky left-0 z-10 bg-card px-3 py-2 text-left",
-                        row.indent ? "pl-6 text-muted-foreground" : "text-parchment/90",
-                        row.emphasis === "balance" && "font-semibold",
+                        "sticky left-0 z-10 px-3 py-2.5 text-left",
+                        rowBg || "bg-card",
+                        row.indent ? "pl-6 text-muted-foreground" : "text-foreground",
+                        row.emphasis && "font-semibold",
                       )}
                     >
                       {row.label}
                     </td>
                     {query.data!.months.map((mo) => (
-                      <td key={mo.month} className={cn("px-3 py-2", emph)}>
+                      <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
                         {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
                       </td>
                     ))}
-                    <td className={cn("bg-secondary/30 px-3 py-2", emph)}>
+                    <td className={cn("bg-primary/10 px-3 py-2.5 font-medium", valCls)}>
                       {row.key === "saldoInicial"
                         ? "—"
                         : fmtCell(

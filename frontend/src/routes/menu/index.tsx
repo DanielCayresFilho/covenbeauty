@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -9,6 +9,11 @@ import {
   Clock,
   AlertTriangle,
   Cake,
+  UserPlus,
+  CalendarDays,
+  Receipt,
+  Scissors,
+  Package,
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
@@ -111,6 +116,19 @@ function Dashboard() {
           Olá, {firstName} ✦
         </h1>
       </div>
+
+      {/* Ações rápidas */}
+      <section>
+        <SectionTitle>Ações rápidas</SectionTitle>
+        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
+          <QuickAction to="/menu/clientes" icon={UserPlus} label="Cliente" />
+          <QuickAction to="/menu/agenda" icon={CalendarDays} label="Agenda" />
+          <QuickAction to="/menu/comandas" icon={Receipt} label="Comandas" />
+          <QuickAction to="/menu/procedimentos" icon={Scissors} label="Procedim." />
+          <QuickAction to="/menu/produtos" icon={Package} label="Produtos" />
+          <QuickAction to="/menu/financeiro" icon={Wallet} label="Financeiro" />
+        </div>
+      </section>
 
       {/* Resumo do mês */}
       <section>
@@ -245,6 +263,28 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h2 className="mb-3 text-xs uppercase tracking-[0.3em] text-muted-foreground">
       {children}
     </h2>
+  );
+}
+
+function QuickAction({
+  to,
+  icon: Icon,
+  label,
+}: {
+  to: string;
+  icon: typeof Wallet;
+  label: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/60 px-2 py-4 text-center transition-colors hover:border-primary hover:bg-card"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="text-xs font-medium text-foreground">{label}</span>
+    </Link>
   );
 }
 

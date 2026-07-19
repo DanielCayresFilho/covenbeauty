@@ -37,38 +37,61 @@
   --font-sans: "Inter", ui-sans-serif, system-ui;
 }
 
+/* ── Tema DARK (padrão) — místico, cores mais vivas ── */
 :root {
-  --radius: 0.375rem;
-  /* Coven Beauty — dark mystical palette */
-  --background: oklch(0.14 0.015 20);            /* near-black, warm */
-  --foreground: oklch(0.94 0.02 80);             /* parchment cream */
-  --card: oklch(0.17 0.02 20);
-  --card-foreground: oklch(0.94 0.02 80);
-  --popover: oklch(0.17 0.02 20);
-  --popover-foreground: oklch(0.94 0.02 80);
-  --primary: oklch(0.42 0.14 25);                /* blood burgundy */
-  --primary-foreground: oklch(0.96 0.02 80);
-  --secondary: oklch(0.22 0.02 20);
-  --secondary-foreground: oklch(0.94 0.02 80);
-  --muted: oklch(0.20 0.015 20);
-  --muted-foreground: oklch(0.68 0.02 60);
-  --accent: oklch(0.55 0.16 25);                 /* ember red */
-  --accent-foreground: oklch(0.96 0.02 80);
-  --destructive: oklch(0.55 0.22 27);
-  --destructive-foreground: oklch(0.96 0.02 80);
-  --border: oklch(0.28 0.03 25 / 60%);
-  --input: oklch(0.28 0.03 25);
-  --ring: oklch(0.55 0.16 25);
+  --radius: 0.5rem;
+  --background: oklch(0.16 0.018 25);
+  --foreground: oklch(0.97 0.02 85);
+  --card: oklch(0.21 0.024 25);
+  --card-foreground: oklch(0.97 0.02 85);
+  --popover: oklch(0.20 0.024 25);
+  --popover-foreground: oklch(0.97 0.02 85);
+  --primary: oklch(0.56 0.21 26);                /* blood vivo */
+  --primary-foreground: oklch(0.99 0.01 85);
+  --secondary: oklch(0.28 0.03 26);
+  --secondary-foreground: oklch(0.97 0.02 85);
+  --muted: oklch(0.25 0.022 26);
+  --muted-foreground: oklch(0.78 0.03 72);       /* texto secundário legível */
+  --accent: oklch(0.64 0.21 32);                 /* ember vivo */
+  --accent-foreground: oklch(0.99 0.01 85);
+  --destructive: oklch(0.62 0.23 27);
+  --destructive-foreground: oklch(0.99 0.01 85);
+  --border: oklch(0.36 0.03 28 / 75%);
+  --input: oklch(0.36 0.03 28);
+  --ring: oklch(0.64 0.21 32);
 
-  --blood: oklch(0.42 0.14 25);
-  --blood-deep: oklch(0.28 0.10 22);
-  --parchment: oklch(0.94 0.03 80);
-  --ash: oklch(0.55 0.02 60);
+  --blood: oklch(0.66 0.21 27);                  /* vermelho vivo p/ acentos/texto */
+  --blood-deep: oklch(0.42 0.15 24);
+  --parchment: oklch(0.97 0.022 85);             /* texto forte (claro no dark) */
+  --ash: oklch(0.74 0.02 68);
 }
 
-.dark {
-  --background: oklch(0.10 0.015 20);
-  --foreground: oklch(0.94 0.02 80);
+/* ── Tema LIGHT — claro e quente (só no CRM; a landing é sempre escura) ── */
+.light .crm-ui {
+  --background: oklch(0.98 0.008 85);
+  --foreground: oklch(0.24 0.02 30);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.02 30);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.02 30);
+  --primary: oklch(0.52 0.21 26);
+  --primary-foreground: oklch(0.99 0.01 85);
+  --secondary: oklch(0.95 0.014 70);
+  --secondary-foreground: oklch(0.28 0.03 28);
+  --muted: oklch(0.95 0.012 70);
+  --muted-foreground: oklch(0.46 0.03 42);
+  --accent: oklch(0.58 0.20 30);
+  --accent-foreground: oklch(0.99 0.01 85);
+  --destructive: oklch(0.56 0.22 27);
+  --destructive-foreground: oklch(0.99 0.01 85);
+  --border: oklch(0.87 0.015 55);
+  --input: oklch(0.87 0.015 55);
+  --ring: oklch(0.52 0.21 26);
+
+  --blood: oklch(0.52 0.21 27);                  /* vermelho (bom no claro) */
+  --blood-deep: oklch(0.44 0.17 24);
+  --parchment: oklch(0.26 0.02 30);              /* texto forte (ESCURO no light) */
+  --ash: oklch(0.50 0.02 46);
 }
 
 @layer base {
@@ -79,12 +102,17 @@
     color: var(--color-foreground);
     font-family: var(--font-serif);
     font-feature-settings: "liga", "dlig";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     background-image:
       radial-gradient(ellipse at top, oklch(0.22 0.08 25 / 0.35), transparent 60%),
       radial-gradient(ellipse at bottom, oklch(0.18 0.05 25 / 0.4), transparent 70%);
     background-attachment: fixed;
   }
   h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.01em; }
+  /* Interface do CRM em sans-serif (mais nítida); títulos ficam serifados. */
+  .crm-ui { font-family: var(--font-sans); }
 }
 
 @utility text-blood { color: var(--blood); }
@@ -145,20 +173,23 @@
 .fc .fc-list-day-side-text {
   color: var(--muted-foreground);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
 }
+.fc .fc-col-header-cell-cushion { font-weight: 600; color: var(--foreground); }
 .fc-theme-standard td,
 .fc-theme-standard th,
 .fc-theme-standard .fc-scrollgrid {
   border-color: var(--border);
 }
-.fc .fc-timegrid-slot { height: 2.4rem; }
+.fc .fc-timegrid-slot { height: 2.8rem; }
 .fc .fc-event {
   border: none;
   border-radius: 6px;
-  padding: 1px 4px;
-  font-size: 0.72rem;
+  padding: 2px 5px;
+  font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
 }
-.fc .fc-event-time { font-weight: 600; opacity: 0.9; }
+.fc .fc-event-time { font-weight: 700; opacity: 0.95; }
+.fc .fc-event-title { font-weight: 500; }
 .fc .fc-col-header-cell-cushion { padding: 6px 0; }
