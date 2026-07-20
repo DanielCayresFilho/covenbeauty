@@ -21,6 +21,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { apiFetch, ApiError } from "@/lib/api";
+import {
+  PhotoField,
+  useEvaluationPhotos,
+} from "@/components/evaluations/evaluation-photos";
 import { SignaturePad } from "./signature-pad";
 
 export interface EvaluationData {
@@ -65,6 +69,8 @@ export function EvaluationForm({
 }) {
   const qc = useQueryClient();
   const isEdit = !!evaluation;
+  // Fotos: na ficha nova ficam na fila e sobem logo após salvar.
+  const photos = useEvaluationPhotos(evaluation?.id ?? null);
 
   const { register, handleSubmit, control } = useForm<FormValues>({
     defaultValues: buildDefaults(evaluation),
@@ -78,16 +84,26 @@ export function EvaluationForm({
         body.signedAt = new window.Date().toISOString();
       }
       return isEdit
-        ? apiFetch(`/evaluations/${evaluation!.id}`, {
+        ? apiFetch<{ id: string }>(`/evaluations/${evaluation!.id}`, {
             method: "PATCH",
             body: JSON.stringify(body),
           })
-        : apiFetch("/evaluations", {
+        : apiFetch<{ id: string }>("/evaluations", {
             method: "POST",
             body: JSON.stringify({ ...body, clientId }),
           });
     },
-    onSuccess: () => {
+    onSuccess: async (saved) => {
+      // Ficha recém-criada: agora que existe id, envia as fotos da fila.
+      if (!isEdit && photos.pendingCount > 0 && saved?.id) {
+        try {
+          await photos.flush(saved.id);
+        } catch {
+          toast.error(
+            "Ficha salva, mas não foi possível enviar as fotos. Abra a ficha e tente de novo.",
+          );
+        }
+      }
       toast.success(isEdit ? "Ficha atualizada ✦" : "Ficha salva ✦");
       void qc.invalidateQueries({ queryKey: ["evaluations", clientId] });
       onSaved();
@@ -150,6 +166,7 @@ export function EvaluationForm({
           <Bool {...ctx} name="skinSensitivity" label="Pele vermelha/irritada com facilidade" />
           <Bool {...ctx} name="hasRosacea" label="Tem rosácea" />
           <Bool {...ctx} name="frequentSunExposure" label="Exposição solar frequente" />
+          <PhotoField bucket={photos} stage="FACE" label="Fotos do rosto" />
         </Section>
 
         <Section value="capilar" title="5. Estética capilar (tricologia)">
@@ -163,6 +180,8 @@ export function EvaluationForm({
           <Bool {...ctx} name="usesHeatTools" label="Usa secador/chapinha/babyliss" />
           <Bool {...ctx} name="usesThermalProtector" label="Usa protetor térmico" />
           <Area {...ctx} name="hairCareRoutine" label="Rotina capilar" />
+          <PhotoField bucket={photos} stage="HAIR" label="Fotos do cabelo" />
+          <PhotoField bucket={photos} stage="SCALP" label="Fotos do couro cabeludo" />
         </Section>
 
         <Section value="consent" title="6. Consentimento e assinatura">
@@ -185,7 +204,20 @@ export function EvaluationForm({
           </div>
           <Area {...ctx} name="notes" label="Observações gerais" />
         </Section>
+
+        <Section value="fotos" title="7. Outras fotos">
+          <PhotoField bucket={photos} stage="BODY" label="Fotos corporais" />
+          <PhotoField bucket={photos} stage="OTHER" label="Outras fotos" />
+        </Section>
       </Accordion>
+
+      {!isEdit && photos.pendingCount > 0 && (
+        <p className="text-center text-xs text-muted-foreground">
+          {photos.pendingCount} foto{photos.pendingCount === 1 ? "" : "s"} será
+          {photos.pendingCount === 1 ? "" : "ão"} enviada
+          {photos.pendingCount === 1 ? "" : "s"} ao salvar a ficha.
+        </p>
+      )}
 
       <Button type="submit" disabled={save.isPending} className="h-12 w-full text-base">
         {save.isPending ? "Salvando..." : isEdit ? "Atualizar ficha" : "Salvar ficha"}
