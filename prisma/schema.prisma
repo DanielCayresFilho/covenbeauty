@@ -566,12 +566,51 @@ model ClientEvaluation {
   notes       String?
   createdById String? @map("created_by_id") @db.Uuid // auditoria (sem FK)
 
+  photos EvaluationPhoto[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([clientId])
   @@index([evaluationDate])
   @@map("client_evaluations")
+}
+
+/// Etapa/região da foto anexada à ficha.
+enum PhotoStage {
+  FACE // Rosto
+  HAIR // Cabelo
+  SCALP // Couro cabeludo
+  BODY // Corporal
+  OTHER // Outra
+}
+
+/// Momento da foto (para o histórico antes/depois).
+enum PhotoMoment {
+  BEFORE
+  AFTER
+}
+
+/// Foto anexada a uma ficha de avaliação (arquivo em disco, volume persistente).
+/// Guarda o histórico visual do cliente (antes/depois por etapa).
+model EvaluationPhoto {
+  id           String           @id @default(uuid()) @db.Uuid
+  evaluationId String           @map("evaluation_id") @db.Uuid
+  evaluation   ClientEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  stage  PhotoStage  @default(OTHER)
+  moment PhotoMoment @default(BEFORE)
+
+  // Nome do arquivo no disco (uuid + extensão) — nunca o nome enviado pelo usuário.
+  filename String
+  mimeType String @map("mime_type")
+  size     Int
+  caption  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([evaluationId])
+  @@map("evaluation_photos")
 }
 
 /// Lembrete / tarefa do salão (ex.: "Arrumar cafeteira") com data e conclusão.

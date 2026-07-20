@@ -9,6 +9,7 @@ import {
   EvaluationForm,
   type EvaluationData,
 } from "@/components/evaluations/evaluation-form";
+import { EvaluationPhotos } from "@/components/evaluations/evaluation-photos";
 import { apiFetch } from "@/lib/api";
 
 export const Route = createFileRoute("/menu/clientes/$id/fichas/$fichaId")({
@@ -45,7 +46,10 @@ function FichaDetailPage() {
             Não foi possível carregar a ficha.
           </Card>
         ) : (
-          <EvaluationForm clientId={id} evaluation={query.data} onSaved={back} />
+          <>
+            <EvaluationPhotos evaluationId={fichaId} />
+            <EvaluationForm clientId={id} evaluation={query.data} onSaved={back} />
+          </>
         )}
       </div>
     </AppShell>

@@ -11,6 +11,10 @@ import { QueryEvaluationsDto } from './dto/query-evaluations.dto';
 
 const CLIENT_SELECT = {
   client: { select: { id: true, fullName: true, phone: true } },
+  // Fotos da ficha (histórico antes/depois por etapa).
+  photos: {
+    orderBy: [{ stage: 'asc' }, { moment: 'asc' }, { createdAt: 'asc' }],
+  },
 } satisfies Prisma.ClientEvaluationInclude;
 
 @Injectable()

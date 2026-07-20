@@ -35,9 +35,16 @@ COPY --from=builder /app/package.json ./package.json
 # Roda como usuário sem privilégios. Sem chown -R (lento em node_modules; os
 # arquivos já são legíveis por "other" e a app não escreve em /app).
 RUN addgroup -S app && adduser -S app -G app
+
+# Fotos das fichas de avaliação. O volume persistente do Coolify monta aqui.
+# O diretório é criado com dono `app` para que o container (não-root) escreva:
+# um volume nomeado do Docker herda essa permissão na primeira criação.
+ENV UPLOAD_DIR=/app/uploads
+RUN mkdir -p /app/uploads && chown -R app:app /app/uploads
+
 USER app
 
-EXPOSE 3000
+EXPOSE 3031
 
 # Healthcheck bate no /health (Node 24 tem fetch global).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
