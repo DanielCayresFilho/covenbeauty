@@ -8,6 +8,7 @@ import {
   Scissors,
   Package,
   Wallet,
+  BarChart3,
   Bell,
   Settings,
   Menu,
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { label: "Procedimentos", icon: Scissors, to: "/menu/procedimentos" },
   { label: "Produtos", icon: Package, to: "/menu/produtos" },
   { label: "Financeiro", icon: Wallet, to: "/menu/financeiro" },
+  { label: "Métricas", icon: BarChart3, to: "/menu/metricas" },
   { label: "Lembretes", icon: Bell, to: "/menu/lembretes" },
   { label: "Configurações", icon: Settings, to: "/menu/config" },
 ];

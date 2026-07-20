@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsPeriodQuery } from './dto/analytics-period.query';
 import { TopClientsQuery } from './dto/top-clients.query';
+import { AnalyticsYearQuery } from './dto/analytics-year.query';
 import { AuthUser, CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { RolesGuard } from '@/auth/guards/roles.guard';
@@ -29,5 +30,14 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Clientes que mais gastaram (padrão ano)' })
   topClients(@Query() query: TopClientsQuery, @CurrentUser() user: AuthUser) {
     return this.analytics.topClients(query, user);
+  }
+
+  @Get('overview')
+  @ApiOperation({
+    summary:
+      'Métricas do ano: rankings de clientes, desempenho mensal e procedimentos mais feitos',
+  })
+  overview(@Query() query: AnalyticsYearQuery, @CurrentUser() user: AuthUser) {
+    return this.analytics.overview(query, user);
   }
 }

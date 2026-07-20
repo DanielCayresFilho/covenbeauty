@@ -20,6 +20,7 @@ import { Route as MenuComandasIdRouteImport } from './routes/menu/comandas/$id'
 import { Route as MenuConfigIndexRouteImport } from './routes/menu/config/index'
 import { Route as MenuFinanceiroIndexRouteImport } from './routes/menu/financeiro/index'
 import { Route as MenuLembretesIndexRouteImport } from './routes/menu/lembretes/index'
+import { Route as MenuMetricasIndexRouteImport } from './routes/menu/metricas/index'
 import { Route as MenuProcedimentosIndexRouteImport } from './routes/menu/procedimentos/index'
 import { Route as MenuProdutosIndexRouteImport } from './routes/menu/produtos/index'
 import { Route as MenuClientesIdFichasIndexRouteImport } from './routes/menu/clientes/$id/fichas/index'
@@ -81,6 +82,11 @@ const MenuLembretesIndexRoute = MenuLembretesIndexRouteImport.update({
   path: '/menu/lembretes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MenuMetricasIndexRoute = MenuMetricasIndexRouteImport.update({
+  id: '/menu/metricas/',
+  path: '/menu/metricas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MenuProcedimentosIndexRoute = MenuProcedimentosIndexRouteImport.update({
   id: '/menu/procedimentos/',
   path: '/menu/procedimentos/',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/menu/config/': typeof MenuConfigIndexRoute
   '/menu/financeiro/': typeof MenuFinanceiroIndexRoute
   '/menu/lembretes/': typeof MenuLembretesIndexRoute
+  '/menu/metricas/': typeof MenuMetricasIndexRoute
   '/menu/procedimentos/': typeof MenuProcedimentosIndexRoute
   '/menu/produtos/': typeof MenuProdutosIndexRoute
   '/menu/clientes/$id/fichas/$fichaId': typeof MenuClientesIdFichasFichaIdRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/menu/config': typeof MenuConfigIndexRoute
   '/menu/financeiro': typeof MenuFinanceiroIndexRoute
   '/menu/lembretes': typeof MenuLembretesIndexRoute
+  '/menu/metricas': typeof MenuMetricasIndexRoute
   '/menu/procedimentos': typeof MenuProcedimentosIndexRoute
   '/menu/produtos': typeof MenuProdutosIndexRoute
   '/menu/clientes/$id/fichas/$fichaId': typeof MenuClientesIdFichasFichaIdRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/menu/config/': typeof MenuConfigIndexRoute
   '/menu/financeiro/': typeof MenuFinanceiroIndexRoute
   '/menu/lembretes/': typeof MenuLembretesIndexRoute
+  '/menu/metricas/': typeof MenuMetricasIndexRoute
   '/menu/procedimentos/': typeof MenuProcedimentosIndexRoute
   '/menu/produtos/': typeof MenuProdutosIndexRoute
   '/menu/clientes/$id/fichas/$fichaId': typeof MenuClientesIdFichasFichaIdRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/menu/config/'
     | '/menu/financeiro/'
     | '/menu/lembretes/'
+    | '/menu/metricas/'
     | '/menu/procedimentos/'
     | '/menu/produtos/'
     | '/menu/clientes/$id/fichas/$fichaId'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/menu/config'
     | '/menu/financeiro'
     | '/menu/lembretes'
+    | '/menu/metricas'
     | '/menu/procedimentos'
     | '/menu/produtos'
     | '/menu/clientes/$id/fichas/$fichaId'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/menu/config/'
     | '/menu/financeiro/'
     | '/menu/lembretes/'
+    | '/menu/metricas/'
     | '/menu/procedimentos/'
     | '/menu/produtos/'
     | '/menu/clientes/$id/fichas/$fichaId'
@@ -234,6 +246,7 @@ export interface RootRouteChildren {
   MenuConfigIndexRoute: typeof MenuConfigIndexRoute
   MenuFinanceiroIndexRoute: typeof MenuFinanceiroIndexRoute
   MenuLembretesIndexRoute: typeof MenuLembretesIndexRoute
+  MenuMetricasIndexRoute: typeof MenuMetricasIndexRoute
   MenuProcedimentosIndexRoute: typeof MenuProcedimentosIndexRoute
   MenuProdutosIndexRoute: typeof MenuProdutosIndexRoute
   MenuClientesIdFichasFichaIdRoute: typeof MenuClientesIdFichasFichaIdRoute
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MenuLembretesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/menu/metricas/': {
+      id: '/menu/metricas/'
+      path: '/menu/metricas'
+      fullPath: '/menu/metricas/'
+      preLoaderRoute: typeof MenuMetricasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/menu/procedimentos/': {
       id: '/menu/procedimentos/'
       path: '/menu/procedimentos'
@@ -370,6 +390,7 @@ const rootRouteChildren: RootRouteChildren = {
   MenuConfigIndexRoute: MenuConfigIndexRoute,
   MenuFinanceiroIndexRoute: MenuFinanceiroIndexRoute,
   MenuLembretesIndexRoute: MenuLembretesIndexRoute,
+  MenuMetricasIndexRoute: MenuMetricasIndexRoute,
   MenuProcedimentosIndexRoute: MenuProcedimentosIndexRoute,
   MenuProdutosIndexRoute: MenuProdutosIndexRoute,
   MenuClientesIdFichasFichaIdRoute: MenuClientesIdFichasFichaIdRoute,
