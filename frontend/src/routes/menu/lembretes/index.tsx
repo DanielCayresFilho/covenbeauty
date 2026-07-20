@@ -255,11 +255,13 @@ function ReminderForm({ open, onClose }: { open: boolean; onClose: () => void })
             <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-11" placeholder="ex.: Arrumar cafeteira" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            {/* min-w-0: sem isso o campo de data (largura intrínseca no Safari)
+                estoura a coluna e invade a Prioridade no iPad. */}
+            <div className="min-w-0 space-y-1.5">
               <Label>Vencimento</Label>
               <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-11" />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label>Prioridade</Label>
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger className="h-11">

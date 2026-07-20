@@ -217,6 +217,27 @@
 .crm-ui .text-sm { font-size: 0.95rem; line-height: 1.4rem; }
 .crm-ui .text-base { font-size: 1.05rem; line-height: 1.6rem; }
 
+/* ── Safari/iOS: campos de data têm largura intrínseca e estouram o grid ──
+   Sem isto, no iPad o campo de data invade o campo ao lado. */
+.crm-ui input[type="date"],
+.crm-ui input[type="datetime-local"],
+.crm-ui input[type="time"],
+.crm-ui input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  width: 100%;
+}
+/* O item de grid/flex que contém uma data precisa poder encolher. */
+.crm-ui .grid > *:has(input[type="date"]),
+.crm-ui .grid > *:has(input[type="datetime-local"]),
+.crm-ui .grid > *:has(input[type="time"]),
+.crm-ui .flex > *:has(input[type="date"]),
+.crm-ui .flex > *:has(input[type="datetime-local"]),
+.crm-ui .flex > *:has(input[type="time"]) {
+  min-width: 0;
+}
+
 /* ── Animações de navegação do CRM ── */
 @keyframes cb-fade-up {
   from { opacity: 0; transform: translateY(12px); }

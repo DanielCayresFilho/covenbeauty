@@ -147,7 +147,16 @@ function Agenda() {
     appt: null,
   });
   const [mounted, setMounted] = useState(false);
+  // Agenda é compartilhada: dá para focar em um profissional quando lota.
+  const [professionalId, setProfessionalId] = useState("all");
   useEffect(() => setMounted(true), []);
+
+  const professionals = useQuery({
+    queryKey: ["professionals"],
+    queryFn: () =>
+      apiFetch<{ id: string; fullName: string }[]>("/users/professionals"),
+    staleTime: 5 * 60 * 1000,
+  });
 
   return (
     <div className="space-y-4">
@@ -177,6 +186,23 @@ function Agenda() {
         </div>
       </div>
 
+      {/* Filtro por profissional (a agenda mostra todos por padrão) */}
+      {(professionals.data?.length ?? 0) > 1 && (
+        <Select value={professionalId} onValueChange={setProfessionalId}>
+          <SelectTrigger className="h-10 w-full sm:w-64">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os profissionais</SelectItem>
+            {professionals.data!.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.fullName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       {/* Legenda de cores */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
         {LEGEND.map((l) => (
@@ -193,9 +219,9 @@ function Agenda() {
       {mounted ? (
         <div key={mode} className="cb-fade-in">
           {mode === "calendar" ? (
-            <CalendarView onSelect={setSelected} />
+            <CalendarView onSelect={setSelected} professionalId={professionalId} />
           ) : (
-            <ListView onSelect={setSelected} />
+            <ListView onSelect={setSelected} professionalId={professionalId} />
           )}
         </div>
       ) : (
@@ -222,7 +248,13 @@ function Agenda() {
 
 // ─────────────── Calendário (FullCalendar) ───────────────
 
-function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
+function CalendarView({
+  onSelect,
+  professionalId,
+}: {
+  onSelect: (a: Appt) => void;
+  professionalId: string;
+}) {
   const calRef = useRef<FullCalendar>(null);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [title, setTitle] = useState("");
@@ -240,16 +272,20 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
 
   const events = useMemo(
     () =>
-      (query.data?.data ?? []).map((a) => ({
-        id: a.id,
-        title: apptTitle(a),
-        start: a.startTime,
-        end: a.endTime,
-        backgroundColor: apptColor(a),
-        borderColor: "transparent",
-        extendedProps: { appt: a },
-      })),
-    [query.data],
+      (query.data?.data ?? [])
+        .filter(
+          (a) => professionalId === "all" || a.professional?.id === professionalId,
+        )
+        .map((a) => ({
+          id: a.id,
+          title: apptTitle(a),
+          start: a.startTime,
+          end: a.endTime,
+          backgroundColor: apptColor(a),
+          borderColor: "transparent",
+          extendedProps: { appt: a },
+        })),
+    [query.data, professionalId],
   );
 
   const api = () => calRef.current?.getApi();
@@ -305,6 +341,9 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
           slotMaxTime="21:00:00"
           slotDuration="00:30:00"
           expandRows
+          /* Dois profissionais no mesmo horário: dividem o espaço lado a lado
+             em vez de um cobrir o outro. */
+          slotEventOverlap={false}
           events={events}
           eventContent={renderEventContent}
           eventClick={(arg: EventClickArg) =>
@@ -322,7 +361,13 @@ function CalendarView({ onSelect }: { onSelect: (a: Appt) => void }) {
 
 // ─────────────── Lista (próximos 14 dias) ───────────────
 
-function ListView({ onSelect }: { onSelect: (a: Appt) => void }) {
+function ListView({
+  onSelect,
+  professionalId,
+}: {
+  onSelect: (a: Appt) => void;
+  professionalId: string;
+}) {
   const range = useMemo(() => {
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -342,11 +387,14 @@ function ListView({ onSelect }: { onSelect: (a: Appt) => void }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Appt[]>();
     for (const a of query.data?.data ?? []) {
+      if (professionalId !== "all" && a.professional?.id !== professionalId) {
+        continue;
+      }
       const day = fmt(a.startTime, "yyyy-MM-dd");
       (map.get(day) ?? map.set(day, []).get(day)!).push(a);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [query.data]);
+  }, [query.data, professionalId]);
 
   if (query.isLoading) {
     return (
