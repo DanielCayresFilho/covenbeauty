@@ -77,7 +77,18 @@ interface Appt {
   professional: { id?: string; fullName: string } | null;
   procedures: { procedureId?: string; nameSnapshot: string }[];
   comanda?: { id: string; status: string } | null;
+  sessionsPlanned?: number | null;
+  sessionNumber?: number | null;
 }
+
+/** "Sessão 1/3", "Sessão 2", ou null quando não é tatuagem. */
+const sessionLabel = (a: Appt) => {
+  if (a.sessionNumber && a.sessionsPlanned)
+    return `Sessão ${a.sessionNumber}/${a.sessionsPlanned}`;
+  if (a.sessionsPlanned) return `${a.sessionsPlanned} sessões`;
+  if (a.sessionNumber) return `Sessão ${a.sessionNumber}`;
+  return null;
+};
 interface Paginated<T> {
   data: T[];
 }
@@ -126,6 +137,7 @@ function renderEventContent(arg: EventContentArg) {
       {a.type !== "BLOCK" && a.professional && (
         <div className="fc-cb-sub">✦ {a.professional.fullName}</div>
       )}
+      {sessionLabel(a) && <div className="fc-cb-sub">🖊 {sessionLabel(a)}</div>}
       {a.type !== "BLOCK" && procs && <div className="fc-cb-sub">{procs}</div>}
     </div>
   );
@@ -555,6 +567,9 @@ function AppointmentSheet({
               </Row>
               {appt.professional && (
                 <Row label="Profissional">{appt.professional.fullName}</Row>
+              )}
+              {sessionLabel(appt) && (
+                <Row label="Tatuagem">{sessionLabel(appt)}</Row>
               )}
               {isAppt && (
                 <Row label="Procedimentos">

@@ -66,6 +66,8 @@ export interface EditAppt {
   professionalId?: string;
   clientId?: string | null;
   procedures: { procedureId?: string; nameSnapshot: string }[];
+  sessionsPlanned?: number | null;
+  sessionNumber?: number | null;
 }
 
 const toLocalInput = (iso: string) =>
@@ -86,11 +88,14 @@ export function AppointmentForm({
   const isEdit = !!appt;
 
   const [type, setType] = useState<"APPOINTMENT" | "BLOCK">("APPOINTMENT");
+  const [isTattoo, setIsTattoo] = useState(false);
   const [professionalId, setProfessionalId] = useState("");
   const [client, setClient] = useState<{ id: string; fullName: string } | null>(null);
   const [procedureIds, setProcedureIds] = useState<string[]>([]);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [sessionsPlanned, setSessionsPlanned] = useState("");
+  const [sessionNumber, setSessionNumber] = useState("");
   const [notes, setNotes] = useState("");
 
   const professionals = useQuery({
@@ -112,6 +117,7 @@ export function AppointmentForm({
   useEffect(() => {
     if (!open) return;
     setType(appt?.type ?? "APPOINTMENT");
+    setIsTattoo(!!appt?.sessionsPlanned || appt?.sessionNumber != null);
     setProfessionalId(appt?.professional?.id ?? appt?.professionalId ?? "");
     setClient(
       appt?.client?.id
@@ -125,6 +131,8 @@ export function AppointmentForm({
     );
     setStart(appt ? toLocalInput(appt.startTime) : nowLocalInput());
     setEnd(appt ? toLocalInput(appt.endTime) : "");
+    setSessionsPlanned(appt?.sessionsPlanned ? String(appt.sessionsPlanned) : "");
+    setSessionNumber(appt?.sessionNumber ? String(appt.sessionNumber) : "");
     setNotes(appt?.notes ?? "");
   }, [open, appt]);
 
@@ -165,6 +173,14 @@ export function AppointmentForm({
         startTime: startISO,
         procedureIds,
         notes: notes || undefined,
+        // Tatuagem: fim manual + sessões.
+        ...(isTattoo
+          ? {
+              endTime: fromZonedTime(end, TZ).toISOString(),
+              sessionsPlanned: sessionsPlanned ? Number(sessionsPlanned) : undefined,
+              sessionNumber: sessionNumber ? Number(sessionNumber) : undefined,
+            }
+          : {}),
       });
       return isEdit
         ? apiFetch(`/appointments/${appt!.id}`, { method: "PATCH", body })
@@ -186,6 +202,11 @@ export function AppointmentForm({
       if (!client) return toast.error("Selecione o cliente");
       if (procedureIds.length === 0)
         return toast.error("Selecione ao menos um procedimento");
+      if (isTattoo) {
+        if (!end) return toast.error("Informe o horário de fim da tatuagem");
+        if (fromZonedTime(end, TZ) <= fromZonedTime(start, TZ))
+          return toast.error("O fim deve ser após o início");
+      }
     } else {
       if (!end) return toast.error("Informe o fim do bloqueio");
       if (fromZonedTime(end, TZ) <= fromZonedTime(start, TZ))
@@ -206,10 +227,31 @@ export function AppointmentForm({
         <div className="space-y-4 px-4 pb-4">
           {!isEdit && (
             <div className="flex rounded-md border border-border p-0.5">
-              <TabBtn active={type === "APPOINTMENT"} onClick={() => setType("APPOINTMENT")}>
+              <TabBtn
+                active={type === "APPOINTMENT" && !isTattoo}
+                onClick={() => {
+                  setType("APPOINTMENT");
+                  setIsTattoo(false);
+                }}
+              >
                 Atendimento
               </TabBtn>
-              <TabBtn active={type === "BLOCK"} onClick={() => setType("BLOCK")}>
+              <TabBtn
+                active={isTattoo}
+                onClick={() => {
+                  setType("APPOINTMENT");
+                  setIsTattoo(true);
+                }}
+              >
+                Tatuagem
+              </TabBtn>
+              <TabBtn
+                active={type === "BLOCK"}
+                onClick={() => {
+                  setType("BLOCK");
+                  setIsTattoo(false);
+                }}
+              >
                 Bloqueio
               </TabBtn>
             </div>
@@ -239,7 +281,9 @@ export function AppointmentForm({
               </div>
 
               <div className="space-y-1.5">
-                <Label>Procedimentos</Label>
+                <Label>
+                  {isTattoo ? "Tipo de tatuagem (para o preço)" : "Procedimentos"}
+                </Label>
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border p-1">
                   {(procedures.data?.data ?? []).length === 0 ? (
                     <p className="p-3 text-center text-xs text-muted-foreground">
@@ -281,7 +325,7 @@ export function AppointmentForm({
                       style: "currency",
                       currency: "BRL",
                     })}
-                    {estEnd && <> · fim ~{estEnd}</>}
+                    {!isTattoo && estEnd && <> · fim ~{estEnd}</>}
                   </p>
                 )}
               </div>
@@ -295,6 +339,46 @@ export function AppointmentForm({
                   className="h-11"
                 />
               </div>
+
+              {isTattoo && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Fim (a tatuagem não tem duração fixa)</Label>
+                    <Input
+                      type="datetime-local"
+                      value={end}
+                      onChange={(e) => setEnd(e.target.value)}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="min-w-0 space-y-1.5">
+                      <Label>Sessão atual</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        inputMode="numeric"
+                        placeholder="ex.: 1"
+                        value={sessionNumber}
+                        onChange={(e) => setSessionNumber(e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="min-w-0 space-y-1.5">
+                      <Label>Total de sessões</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        inputMode="numeric"
+                        placeholder="ex.: 3"
+                        value={sessionsPlanned}
+                        onChange={(e) => setSessionsPlanned(e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
 

@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Camera, X } from "lucide-react";
+import { Camera, Plus, X } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, apiFetchBlob, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-export type Stage = "FACE" | "HAIR" | "SCALP" | "BODY" | "OTHER";
+export type Stage = "FACE" | "HAIR" | "SCALP" | "BODY" | "TATTOO" | "OTHER";
 export type Moment = "BEFORE" | "AFTER";
 
 export interface Photo {
@@ -16,6 +18,7 @@ export interface Photo {
   stage: Stage;
   moment: Moment;
   caption: string | null;
+  session: number | null;
   createdAt: string;
 }
 
@@ -24,6 +27,7 @@ interface PendingPhoto {
   file: File;
   stage: Stage;
   moment: Moment;
+  session?: number;
   previewUrl: string;
 }
 
@@ -80,17 +84,24 @@ export function useEvaluationPhotos(evaluationId: string | null) {
     retry: false,
   });
 
-  const send = (targetId: string, file: File, stage: Stage, moment: Moment) => {
+  const send = (
+    targetId: string,
+    file: File,
+    stage: Stage,
+    moment: Moment,
+    session?: number,
+  ) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("stage", stage);
     fd.append("moment", moment);
+    if (session) fd.append("session", String(session));
     return apiFetch(`/evaluations/${targetId}/photos`, { method: "POST", body: fd });
   };
 
   const upload = useMutation({
-    mutationFn: (v: { file: File; stage: Stage; moment: Moment }) =>
-      send(evaluationId!, v.file, v.stage, v.moment),
+    mutationFn: (v: { file: File; stage: Stage; moment: Moment; session?: number }) =>
+      send(evaluationId!, v.file, v.stage, v.moment, v.session),
     onSuccess: () => {
       toast.success("Foto adicionada ✦");
       void qc.invalidateQueries({ queryKey: ["evaluation-photos", evaluationId] });
@@ -110,14 +121,19 @@ export function useEvaluationPhotos(evaluationId: string | null) {
       toast.error(e instanceof ApiError ? e.message : "Não foi possível remover"),
   });
 
-  const add = (file: File | undefined, stage: Stage, moment: Moment) => {
+  const add = (
+    file: File | undefined,
+    stage: Stage,
+    moment: Moment,
+    session?: number,
+  ) => {
     if (!file) return;
     if (file.size > MAX_BYTES) {
       toast.error("Imagem muito grande (máximo 8 MB)");
       return;
     }
     if (evaluationId) {
-      upload.mutate({ file, stage, moment });
+      upload.mutate({ file, stage, moment, session });
       return;
     }
     // Ficha ainda não salva: guarda para enviar depois.
@@ -128,6 +144,7 @@ export function useEvaluationPhotos(evaluationId: string | null) {
         file,
         stage,
         moment,
+        session,
         previewUrl: URL.createObjectURL(file),
       },
     ]);
@@ -143,7 +160,7 @@ export function useEvaluationPhotos(evaluationId: string | null) {
   /** Envia a fila para a ficha recém-criada. */
   const flush = async (targetId: string) => {
     for (const p of pending) {
-      await send(targetId, p.file, p.stage, p.moment);
+      await send(targetId, p.file, p.stage, p.moment, p.session);
     }
     pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     setPending([]);
@@ -241,6 +258,137 @@ export function PhotoField({
               <img
                 src={p.previewUrl}
                 alt={label}
+                className="aspect-square w-full object-cover"
+              />
+            </Thumb>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fotos de tatuagem organizadas por sessão (antes/depois de cada sessão). */
+export function TattooPhotoField({ bucket }: { bucket: PhotoBucket }) {
+  const server = bucket.serverPhotos.filter((p) => p.stage === "TATTOO");
+  const pend = bucket.pending.filter((p) => p.stage === "TATTOO");
+
+  const usedSessions = [
+    ...new Set([...server, ...pend].map((p) => p.session ?? 1)),
+  ];
+  const [extra, setExtra] = useState<number[]>([]);
+  const sessions = [...new Set([...usedSessions, ...extra, 1])].sort(
+    (a, b) => a - b,
+  );
+  const nextSession = Math.max(0, ...sessions) + 1;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Fotos por sessão (antes e depois)</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1"
+          onClick={() => setExtra((e) => [...e, nextSession])}
+        >
+          <Plus className="h-3.5 w-3.5" /> Sessão
+        </Button>
+      </div>
+
+      {sessions.map((s) => (
+        <TattooSession key={s} bucket={bucket} session={s} />
+      ))}
+    </div>
+  );
+}
+
+function TattooSession({
+  bucket,
+  session,
+}: {
+  bucket: PhotoBucket;
+  session: number;
+}) {
+  const beforeRef = useRef<HTMLInputElement>(null);
+  const afterRef = useRef<HTMLInputElement>(null);
+
+  const server = bucket.serverPhotos.filter(
+    (p) => p.stage === "TATTOO" && (p.session ?? 1) === session,
+  );
+  const pend = bucket.pending.filter(
+    (p) => p.stage === "TATTOO" && (p.session ?? 1) === session,
+  );
+  const hasAny = server.length + pend.length > 0;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-background/40 p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.15em] text-blood">
+        Sessão {session}
+      </p>
+
+      <input
+        ref={beforeRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          bucket.add(e.target.files?.[0], "TATTOO", "BEFORE", session);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          bucket.add(e.target.files?.[0], "TATTOO", "AFTER", session);
+          e.target.value = "";
+        }}
+      />
+
+      <div className="flex gap-2">
+        <PhotoButton
+          onClick={() => beforeRef.current?.click()}
+          disabled={bucket.isUploading}
+          label="Antes"
+        />
+        <PhotoButton
+          onClick={() => afterRef.current?.click()}
+          disabled={bucket.isUploading}
+          label="Depois"
+        />
+      </div>
+
+      {hasAny && (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {server.map((p) => (
+            <Thumb
+              key={p.id}
+              moment={p.moment}
+              onRemove={() => bucket.removeServer.mutate(p.id)}
+            >
+              <AuthImage
+                photoId={p.id}
+                alt={`Sessão ${session}`}
+                className="aspect-square w-full"
+              />
+            </Thumb>
+          ))}
+          {pend.map((p) => (
+            <Thumb
+              key={p.id}
+              moment={p.moment}
+              pending
+              onRemove={() => bucket.removePending(p.id)}
+            >
+              <img
+                src={p.previewUrl}
+                alt={`Sessão ${session}`}
                 className="aspect-square w-full object-cover"
               />
             </Thumb>

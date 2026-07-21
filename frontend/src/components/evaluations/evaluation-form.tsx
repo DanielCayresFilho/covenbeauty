@@ -23,9 +23,27 @@ import {
 import { apiFetch, ApiError } from "@/lib/api";
 import {
   PhotoField,
+  TattooPhotoField,
   useEvaluationPhotos,
+  type PhotoBucket,
 } from "@/components/evaluations/evaluation-photos";
 import { SignaturePad } from "./signature-pad";
+
+const TATTOO_CONSENT = `Eu, conforme já assinado e identificado, declaro ser de minha espontânea vontade, ter uma tatuagem colocada no local do meu corpo acima descrito. Declaro ainda ser maior de 18 anos e não estar sob o efeito de drogas ou álcool, sendo assim capaz de discernir meus atos. Portando lucidez, assino abaixo livremente e de minha parte total entendimento.
+
+Os materiais utilizados são devidamente esterilizados ou descartáveis, assim como todos os padrões de higiene conforme as normas de vigilância sanitária, sendo seguidas corretamente. Fui também informado dos procedimentos e cuidados que devem ser executados por mim durante o processo de cicatrização, isentando de qualquer responsabilidade o tatuador, exceto aqueles que sejam comprovados a imperícia técnica.
+
+Declaro estar informado e ciente das possíveis consequências decorrentes da prática de tatuagem, no que se refere:
+1 – Ao risco de infecção por patógenos veiculados pelo sangue (Vírus da Hepatite C, Vírus da Hepatite B, Vírus da imunodeficiência adquirida (HIV), dentre outros) quando não forem obedecidas adequadamente os procedimentos de limpeza, desinfecção e esterilização dos materiais a serem utilizados, assim como o manuseio apropriado dos descartáveis;
+2 – Aos riscos de acidentes durante a realização do procedimento;
+3 – Ao difícil processo de remoção de uma tatuagem;
+4 – Às possíveis sequelas remanescentes à coloração ou rejeição orgânica dos mesmos como corpos estranhos;
+5 – À procedência das tintas utilizadas;
+6 – Às reações alérgicas a algum pigmento ou a rejeição orgânica dos mesmos corpos estranhos;
+7 – É necessária a avaliação e liberação médica às tatuagens em pessoas portadoras de doenças infectocontagiosas (Hepatite, hanseníase, entre outras), diabetes mellitus, HIV ou outra imunodeficiência, coagulopatias, doenças cardíacas de qualquer natureza, doenças alérgicas, portadores de próteses em qualquer local e válvulas cardíacas, convalescentes de doenças, cirurgias recentes, predisposição a queloide, bem como aplicação dos procedimentos em locais com cicatrizes, alergias, queimaduras, doenças agudas ou crônicas de pele.
+8 – Ao risco de aplicação de tatuagens sem estar vacinado contra tétano e Hepatite B;
+
+Autorizo a realização do procedimento de tatuagem pelo(a) profissional do TATTOO STUDIO OBSCURA, sob minha total responsabilidade.`;
 
 export interface EvaluationData {
   id: string;
@@ -47,6 +65,7 @@ const FOCUS: [string, string][] = [
   ["BOTH", "Ambos"],
   ["FACIAL", "Facial"],
   ["CAPILLARY", "Capilar"],
+  ["TATTOO", "Tatuagem"],
 ];
 
 const numberFields = new Set([
@@ -72,9 +91,11 @@ export function EvaluationForm({
   // Fotos: na ficha nova ficam na fila e sobem logo após salvar.
   const photos = useEvaluationPhotos(evaluation?.id ?? null);
 
-  const { register, handleSubmit, control } = useForm<FormValues>({
+  const { register, handleSubmit, control, watch } = useForm<FormValues>({
     defaultValues: buildDefaults(evaluation),
   });
+  const focus = watch("focus") as string;
+  const isTattoo = focus === "TATTOO";
 
   const save = useMutation({
     mutationFn: (values: FormValues) => {
@@ -121,6 +142,9 @@ export function EvaluationForm({
         <Date {...ctx} name="evaluationDate" label="Data da avaliação" />
       </div>
 
+      {isTattoo ? (
+        <TattooSections ctx={ctx} photos={photos} />
+      ) : (
       <Accordion type="multiple" defaultValue={["saude"]} className="space-y-2">
         <Section value="saude" title="2. Histórico de saúde geral">
           <Area {...ctx} name="allergies" label="Alergias (cosméticos, medicamentos, alimentos, iodo)" />
@@ -210,6 +234,7 @@ export function EvaluationForm({
           <PhotoField bucket={photos} stage="OTHER" label="Outras fotos" />
         </Section>
       </Accordion>
+      )}
 
       {!isEdit && photos.pendingCount > 0 && (
         <p className="text-center text-xs text-muted-foreground">
@@ -223,6 +248,87 @@ export function EvaluationForm({
         {save.isPending ? "Salvando..." : isEdit ? "Atualizar ficha" : "Salvar ficha"}
       </Button>
     </form>
+  );
+}
+
+// ─────────────── Ficha de tatuagem ───────────────
+
+function TattooSections({
+  ctx,
+  photos,
+}: {
+  ctx: Ctx;
+  photos: PhotoBucket;
+}) {
+  return (
+    <Accordion
+      type="multiple"
+      defaultValue={["saude", "tattoo", "termo", "fotos"]}
+      className="space-y-2"
+    >
+      <Section value="saude" title="1. Saúde geral">
+        <Area
+          {...ctx}
+          name="allergies"
+          label="Possui alergia a algum medicamento, material ou substância? Se sim, quais?"
+        />
+        <Bool {...ctx} name="ateInLast3h" label="Está em jejum ou se alimentou nas últimas 3h?" />
+
+        <p className="pt-1 text-xs text-muted-foreground">
+          Possui alguma destas condições? (marque se sim)
+        </p>
+        <Bool {...ctx} name="hasDiabetes" label="Diabetes" />
+        <Bool {...ctx} name="hasHypertension" label="Hipertensão" />
+        <Bool {...ctx} name="hasCoagulationIssues" label="Hemofilia ou problemas de coagulação" />
+        <Bool {...ctx} name="hasSkinDisease" label="Doenças de pele (psoríase, dermatite, etc.)" />
+        <Bool {...ctx} name="hasAutoimmune" label="Doenças autoimunes" />
+        <Bool {...ctx} name="hasEpilepsy" label="Epilepsia ou crises convulsivas" />
+        <Bool {...ctx} name="hasInfectiousDisease" label="Doenças infecciosas transmissíveis (hepatites, HIV, etc.)" />
+        <Bool {...ctx} name="hasHeartCondition" label="Problemas cardíacos" />
+        <Bool {...ctx} name="hasAnestheticAllergy" label="Alergias a anestésicos, látex, pigmentos ou metais" />
+        <Bool {...ctx} name="isPregnant" label="Está grávida ou amamentando?" />
+        <Area {...ctx} name="healthConditionsOther" label="Outras condições" />
+
+        <Area {...ctx} name="medications" label="Está usando medicamentos atualmente? Se sim, quais?" />
+        <Bool {...ctx} name="usesAlcoholOrDrugs" label="Faz uso de álcool ou drogas com frequência?" />
+      </Section>
+
+      <Section value="tattoo" title="2. Sobre a tatuagem">
+        <Bool
+          {...ctx}
+          name="anticoagulants24h"
+          label="Fez uso de anticoagulantes ou bebida alcoólica nas últimas 24h?"
+        />
+        <Txt {...ctx} name="tattooBodyLocation" label="Local do corpo a ser tatuado" />
+        <Bool {...ctx} name="hasTattoos" label="Já possui tatuagens?" />
+        <Area {...ctx} name="notes" label="Observações" />
+      </Section>
+
+      <Section value="termo" title="3. Termo de consentimento">
+        <div className="max-h-64 overflow-y-auto whitespace-pre-line rounded-md border border-border bg-background/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          {TATTOO_CONSENT}
+        </div>
+        <Bool {...ctx} name="tattooConsentAccepted" label="Li e concordo com o termo acima" />
+        <Txt {...ctx} name="signedByName" label="Nome de quem assina" />
+        <div className="space-y-1.5">
+          <Label className="text-xs">Assinatura do cliente</Label>
+          <Controller
+            control={ctx.control}
+            name="signatureDataUrl"
+            render={({ field }) => (
+              <SignaturePad
+                value={field.value as string | undefined}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      </Section>
+
+      <Section value="fotos" title="4. Fotos (antes e depois de cada sessão)">
+        <TattooPhotoField bucket={photos} />
+      </Section>
+    </Accordion>
   );
 }
 
