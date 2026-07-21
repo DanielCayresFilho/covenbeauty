@@ -57,7 +57,14 @@ export class AppointmentsService {
 
     const snapshots = await this.loadProcedureSnapshots(dto.procedureIds);
     const start = new Date(dto.startTime);
-    const end = this.addMinutes(start, this.totalDuration(snapshots));
+    // Fim manual (ex.: tatuagem — duração variável) tem prioridade sobre a soma
+    // das durações dos procedimentos.
+    const end = dto.endTime
+      ? new Date(dto.endTime)
+      : this.addMinutes(start, this.totalDuration(snapshots));
+    if (end <= start) {
+      throw new BadRequestException('O fim deve ser após o início');
+    }
 
     await this.assertNoOverlap(dto.professionalId, start, end);
 
@@ -77,6 +84,8 @@ export class AppointmentsService {
         startTime: start,
         endTime: end,
         notes: dto.notes,
+        sessionsPlanned: dto.sessionsPlanned,
+        sessionNumber: dto.sessionNumber,
         createdById,
         ...(dto.depositAmount != null
           ? {
@@ -259,9 +268,14 @@ export class AppointmentsService {
     const end =
       current.type === AppointmentType.BLOCK
         ? current.endTime
-        : this.addMinutes(start, this.totalDurationOf(durationSource));
+        : dto.endTime
+          ? new Date(dto.endTime) // fim manual (ex.: tatuagem)
+          : this.addMinutes(start, this.totalDurationOf(durationSource));
 
-    if (dto.startTime || dto.procedureIds || dto.professionalId) {
+    if (dto.startTime || dto.procedureIds || dto.professionalId || dto.endTime) {
+      if (end <= start) {
+        throw new BadRequestException('O fim deve ser após o início');
+      }
       await this.assertNoOverlap(professionalId, start, end, id);
       data.startTime = start;
       data.endTime = end;
@@ -271,6 +285,8 @@ export class AppointmentsService {
     if (dto.clientId) data.client = { connect: { id: dto.clientId } };
     if (dto.status) data.status = dto.status;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.sessionsPlanned !== undefined) data.sessionsPlanned = dto.sessionsPlanned;
+    if (dto.sessionNumber !== undefined) data.sessionNumber = dto.sessionNumber;
     if (dto.depositAmount !== undefined) {
       data.depositAmount = new Prisma.Decimal(dto.depositAmount);
       data.depositPaidAt = dto.depositAmount > 0 ? new Date() : null;

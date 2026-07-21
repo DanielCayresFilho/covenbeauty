@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -34,6 +35,27 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsDateString()
   startTime?: string;
+
+  @ApiPropertyOptional({ description: 'Fim manual (ISO 8601) — ex.: tatuagem' })
+  @IsOptional()
+  @IsDateString()
+  endTime?: string;
+
+  @ApiPropertyOptional({ description: 'Tatuagem: nº total de sessões' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sessionsPlanned?: number;
+
+  @ApiPropertyOptional({ description: 'Tatuagem: nº desta sessão' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sessionNumber?: number;
 
   @ApiPropertyOptional({ type: [String], description: 'Substitui os procedimentos' })
   @IsOptional()

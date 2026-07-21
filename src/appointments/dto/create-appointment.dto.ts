@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -28,6 +29,15 @@ export class CreateAppointmentDto {
   @IsDateString({}, { message: 'Data/hora de início inválida' })
   startTime: string;
 
+  @ApiPropertyOptional({
+    example: '2026-08-01T17:00:00.000Z',
+    description:
+      'Fim (ISO 8601). Opcional — se informado (ex.: tatuagem), sobrepõe a soma das durações.',
+  })
+  @IsOptional()
+  @IsDateString({}, { message: 'Data/hora de fim inválida' })
+  endTime?: string;
+
   @ApiProperty({
     type: [String],
     description: 'IDs dos procedimentos (o fim é calculado pela soma das durações)',
@@ -36,6 +46,22 @@ export class CreateAppointmentDto {
   @ArrayMinSize(1, { message: 'Informe ao menos um procedimento' })
   @IsUUID('4', { each: true, message: 'Procedimento inválido' })
   procedureIds: string[];
+
+  @ApiPropertyOptional({ example: 3, description: 'Tatuagem: nº total de sessões planejadas' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sessionsPlanned?: number;
+
+  @ApiPropertyOptional({ example: 1, description: 'Tatuagem: qual sessão é este agendamento' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  sessionNumber?: number;
 
   @ApiPropertyOptional({ enum: AppointmentStatus, default: AppointmentStatus.SCHEDULED })
   @IsOptional()

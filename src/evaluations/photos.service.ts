@@ -69,6 +69,7 @@ export class EvaluationPhotosService {
         stage: dto.stage,
         moment: dto.moment,
         caption: dto.caption,
+        session: dto.session,
         filename,
         mimeType: file.mimetype,
         size: file.size,
@@ -80,7 +81,7 @@ export class EvaluationPhotosService {
     await this.ensureEvaluation(evaluationId);
     return this.prisma.evaluationPhoto.findMany({
       where: { evaluationId },
-      orderBy: [{ stage: 'asc' }, { moment: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ stage: "asc" }, { session: "asc" }, { moment: "asc" }, { createdAt: "asc" }],
     });
   }
 

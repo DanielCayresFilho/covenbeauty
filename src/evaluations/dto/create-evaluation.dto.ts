@@ -298,4 +298,53 @@ export class CreateEvaluationDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  // ─────────────── Anamnese de tatuagem (focus = TATTOO) ───────────────
+
+  @ApiPropertyOptional({ description: 'Está em jejum ou se alimentou nas últimas 3h' })
+  @IsOptional()
+  @IsBoolean()
+  ateInLast3h?: boolean;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasDiabetes?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasHypertension?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasCoagulationIssues?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasSkinDisease?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasAutoimmune?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasEpilepsy?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasInfectiousDisease?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasHeartCondition?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hasAnestheticAllergy?: boolean;
+
+  @ApiPropertyOptional({ description: 'Outras condições de saúde' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  healthConditionsOther?: string;
+
+  @ApiPropertyOptional({ description: 'Usa álcool ou drogas com frequência' })
+  @IsOptional()
+  @IsBoolean()
+  usesAlcoholOrDrugs?: boolean;
+
+  @ApiPropertyOptional({ description: 'Anticoagulante/álcool nas últimas 24h' })
+  @IsOptional()
+  @IsBoolean()
+  anticoagulants24h?: boolean;
+
+  @ApiPropertyOptional({ description: 'Local do corpo a ser tatuado' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  tattooBodyLocation?: string;
+
+  @ApiPropertyOptional({ description: 'Já possui tatuagens' })
+  @IsOptional()
+  @IsBoolean()
+  hasTattoos?: boolean;
+
+  @ApiPropertyOptional({ description: 'Aceite do termo de consentimento de tatuagem' })
+  @IsOptional()
+  @IsBoolean()
+  tattooConsentAccepted?: boolean;
 }
