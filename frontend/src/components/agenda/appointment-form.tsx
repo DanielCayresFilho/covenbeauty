@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,7 @@ export interface EditAppt {
   procedures: { procedureId?: string; nameSnapshot: string }[];
   sessionsPlanned?: number | null;
   sessionNumber?: number | null;
+  subtotal?: string | null;
 }
 
 const toLocalInput = (iso: string) =>
@@ -96,6 +97,8 @@ export function AppointmentForm({
   const [end, setEnd] = useState("");
   const [sessionsPlanned, setSessionsPlanned] = useState("");
   const [sessionNumber, setSessionNumber] = useState("");
+  const [price, setPrice] = useState("");
+  const [procSearch, setProcSearch] = useState("");
   const [notes, setNotes] = useState("");
 
   const professionals = useQuery({
@@ -117,7 +120,8 @@ export function AppointmentForm({
   useEffect(() => {
     if (!open) return;
     setType(appt?.type ?? "APPOINTMENT");
-    setIsTattoo(!!appt?.sessionsPlanned || appt?.sessionNumber != null);
+    const tattoo = !!appt?.sessionsPlanned || appt?.sessionNumber != null;
+    setIsTattoo(tattoo);
     setProfessionalId(appt?.professional?.id ?? appt?.professionalId ?? "");
     setClient(
       appt?.client?.id
@@ -133,13 +137,20 @@ export function AppointmentForm({
     setEnd(appt ? toLocalInput(appt.endTime) : "");
     setSessionsPlanned(appt?.sessionsPlanned ? String(appt.sessionsPlanned) : "");
     setSessionNumber(appt?.sessionNumber ? String(appt.sessionNumber) : "");
+    setPrice(tattoo && appt?.subtotal != null ? String(Number(appt.subtotal)) : "");
+    setProcSearch("");
     setNotes(appt?.notes ?? "");
   }, [open, appt]);
 
+  const allProcs = procedures.data?.data ?? [];
+  const filteredProcs = useMemo(() => {
+    const q = procSearch.trim().toLowerCase();
+    if (!q) return allProcs;
+    return allProcs.filter((p) => p.name.toLowerCase().includes(q));
+  }, [allProcs, procSearch]);
   const selectedProcs = useMemo(
-    () =>
-      (procedures.data?.data ?? []).filter((p) => procedureIds.includes(p.id)),
-    [procedures.data, procedureIds],
+    () => allProcs.filter((p) => procedureIds.includes(p.id)),
+    [allProcs, procedureIds],
   );
   const totalMin = selectedProcs.reduce((s, p) => s + p.durationMinutes, 0);
   const totalPrice = selectedProcs.reduce((s, p) => s + Number(p.price), 0);
@@ -179,6 +190,7 @@ export function AppointmentForm({
               endTime: fromZonedTime(end, TZ).toISOString(),
               sessionsPlanned: sessionsPlanned ? Number(sessionsPlanned) : undefined,
               sessionNumber: sessionNumber ? Number(sessionNumber) : undefined,
+              price: price ? Number(price) : undefined,
             }
           : {}),
       });
@@ -206,6 +218,8 @@ export function AppointmentForm({
         if (!end) return toast.error("Informe o horário de fim da tatuagem");
         if (fromZonedTime(end, TZ) <= fromZonedTime(start, TZ))
           return toast.error("O fim deve ser após o início");
+        if (!price || Number(price) <= 0)
+          return toast.error("Informe o preço da tatuagem");
       }
     } else {
       if (!end) return toast.error("Informe o fim do bloqueio");
@@ -282,15 +296,30 @@ export function AppointmentForm({
 
               <div className="space-y-1.5">
                 <Label>
-                  {isTattoo ? "Tipo de tatuagem (para o preço)" : "Procedimentos"}
+                  {isTattoo ? "Tipo de tatuagem" : "Procedimentos"}
                 </Label>
+                {allProcs.length > 0 && (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={procSearch}
+                      onChange={(e) => setProcSearch(e.target.value)}
+                      placeholder="Buscar procedimento..."
+                      className="h-10 pl-8"
+                    />
+                  </div>
+                )}
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border p-1">
-                  {(procedures.data?.data ?? []).length === 0 ? (
+                  {allProcs.length === 0 ? (
                     <p className="p-3 text-center text-xs text-muted-foreground">
                       Nenhum procedimento cadastrado.
                     </p>
+                  ) : filteredProcs.length === 0 ? (
+                    <p className="p-3 text-center text-xs text-muted-foreground">
+                      Nada encontrado para “{procSearch}”.
+                    </p>
                   ) : (
-                    procedures.data!.data.map((p) => {
+                    filteredProcs.map((p) => {
                       const on = procedureIds.includes(p.id);
                       return (
                         <button
@@ -308,9 +337,11 @@ export function AppointmentForm({
                         >
                           <span className="min-w-0 truncate">
                             {p.name}
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {p.durationMinutes}min
-                            </span>
+                            {!isTattoo && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {p.durationMinutes}min
+                              </span>
+                            )}
                           </span>
                           {on && <Check className="h-4 w-4 shrink-0 text-blood" />}
                         </button>
@@ -318,17 +349,36 @@ export function AppointmentForm({
                     })
                   )}
                 </div>
-                {procedureIds.length > 0 && (
+                {!isTattoo && procedureIds.length > 0 && (
                   <p className="text-xs text-muted-foreground">
                     Total: {totalMin}min ·{" "}
                     {totalPrice.toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
-                    {!isTattoo && estEnd && <> · fim ~{estEnd}</>}
+                    {estEnd && <> · fim ~{estEnd}</>}
                   </p>
                 )}
               </div>
+
+              {isTattoo && (
+                <div className="space-y-1.5">
+                  <Label>Preço da tatuagem (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder="ex.: 350,00"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="h-11"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    O valor é manual (não vem do procedimento) e vai para a comanda.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label>Início</Label>

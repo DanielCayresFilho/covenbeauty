@@ -79,6 +79,7 @@ interface Appt {
   comanda?: { id: string; status: string } | null;
   sessionsPlanned?: number | null;
   sessionNumber?: number | null;
+  subtotal?: string | null;
 }
 
 /** "Sessão 1/3", "Sessão 2", ou null quando não é tatuagem. */

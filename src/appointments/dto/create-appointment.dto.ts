@@ -63,6 +63,17 @@ export class CreateAppointmentDto {
   @Max(50)
   sessionNumber?: number;
 
+  @ApiPropertyOptional({
+    example: 350,
+    description:
+      'Preço manual (R$). Ex.: tatuagem — sobrepõe o preço do procedimento.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Preço inválido' })
+  @Min(0)
+  price?: number;
+
   @ApiPropertyOptional({ enum: AppointmentStatus, default: AppointmentStatus.SCHEDULED })
   @IsOptional()
   @IsEnum(AppointmentStatus)

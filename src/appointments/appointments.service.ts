@@ -55,7 +55,10 @@ export class AppointmentsService {
     await this.assertProfessional(dto.professionalId);
     await this.assertClient(dto.clientId);
 
-    const snapshots = await this.loadProcedureSnapshots(dto.procedureIds);
+    const snapshots = this.applyManualPrice(
+      await this.loadProcedureSnapshots(dto.procedureIds),
+      dto.price,
+    );
     const start = new Date(dto.startTime);
     // Fim manual (ex.: tatuagem — duração variável) tem prioridade sobre a soma
     // das durações dos procedimentos.
@@ -256,7 +259,10 @@ export class AppointmentsService {
       if (current.type !== AppointmentType.APPOINTMENT) {
         throw new BadRequestException('Bloqueios não possuem procedimentos');
       }
-      snapshots = await this.loadProcedureSnapshots(dto.procedureIds);
+      snapshots = this.applyManualPrice(
+        await this.loadProcedureSnapshots(dto.procedureIds),
+        dto.price,
+      );
     }
 
     const professionalId = dto.professionalId ?? current.professionalId;
@@ -402,6 +408,23 @@ export class AppointmentsService {
         durationSnapshot: p.durationMinutes,
       };
     });
+  }
+
+  /**
+   * Preço manual (ex.: tatuagem): concentra o valor na 1ª linha (as demais
+   * ficam em 0), para que o subtotal seja exatamente o preço digitado. O valor
+   * flui daqui para o financeiro do agendamento e para a comanda.
+   */
+  private applyManualPrice(
+    snapshots: ProcedureSnapshot[],
+    price?: number,
+  ): ProcedureSnapshot[] {
+    if (price == null || snapshots.length === 0) return snapshots;
+    const total = new Prisma.Decimal(price);
+    return snapshots.map((s, i) => ({
+      ...s,
+      priceSnapshot: i === 0 ? total : new Prisma.Decimal(0),
+    }));
   }
 
   private totalDuration(snapshots: ProcedureSnapshot[]): number {

@@ -57,6 +57,13 @@ export class UpdateAppointmentDto {
   @Max(50)
   sessionNumber?: number;
 
+  @ApiPropertyOptional({ description: 'Preço manual (R$) — ex.: tatuagem' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  price?: number;
+
   @ApiPropertyOptional({ type: [String], description: 'Substitui os procedimentos' })
   @IsOptional()
   @IsArray()
