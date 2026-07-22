@@ -26,6 +26,7 @@ import type {
 
 import { AppShell } from "@/components/app-shell";
 import { AppointmentForm, type EditAppt } from "@/components/agenda/appointment-form";
+import { Decalque } from "@/components/agenda/decalque";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -80,7 +81,16 @@ interface Appt {
   sessionsPlanned?: number | null;
   sessionNumber?: number | null;
   subtotal?: string | null;
+  decalqueFilename?: string | null;
 }
+
+/** Heurística: é tatuagem? (sessões, decalque ou linha de texto livre). */
+const isTattooAppt = (a: Appt) =>
+  a.type === "APPOINTMENT" &&
+  (!!a.sessionsPlanned ||
+    a.sessionNumber != null ||
+    !!a.decalqueFilename ||
+    (a.procedures.length > 0 && !a.procedures[0].procedureId));
 
 /** "Sessão 1/3", "Sessão 2", ou null quando não é tatuagem. */
 const sessionLabel = (a: Appt) => {
@@ -578,6 +588,19 @@ function AppointmentSheet({
                 </Row>
               )}
               {appt.notes && <Row label="Observação">{appt.notes}</Row>}
+
+              {isTattooAppt(appt) && (
+                <div className="border-t border-border pt-4">
+                  <Decalque
+                    appointmentId={appt.id}
+                    decalqueFilename={appt.decalqueFilename}
+                    canEdit
+                    onChanged={() =>
+                      void qc.invalidateQueries({ queryKey: ["appointments"] })
+                    }
+                  />
+                </div>
+              )}
 
               {/* Ações */}
               {isAppt && (

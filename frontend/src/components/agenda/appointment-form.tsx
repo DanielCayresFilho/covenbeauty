@@ -7,6 +7,7 @@ import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -90,6 +91,8 @@ export function AppointmentForm({
 
   const [type, setType] = useState<"APPOINTMENT" | "BLOCK">("APPOINTMENT");
   const [isTattoo, setIsTattoo] = useState(false);
+  const [tattooFree, setTattooFree] = useState(true); // descrição livre (padrão)
+  const [tattooDesc, setTattooDesc] = useState("");
   const [professionalId, setProfessionalId] = useState("");
   const [client, setClient] = useState<{ id: string; fullName: string } | null>(null);
   const [procedureIds, setProcedureIds] = useState<string[]>([]);
@@ -122,6 +125,11 @@ export function AppointmentForm({
     setType(appt?.type ?? "APPOINTMENT");
     const tattoo = !!appt?.sessionsPlanned || appt?.sessionNumber != null;
     setIsTattoo(tattoo);
+    // Linha de texto livre = procedimento sem procedureId. Nova tatuagem: livre por padrão.
+    const freeLine =
+      (appt?.procedures?.length ?? 0) > 0 && !appt?.procedures?.[0]?.procedureId;
+    setTattooFree(freeLine || !appt);
+    setTattooDesc(freeLine ? (appt?.procedures?.[0]?.nameSnapshot ?? "") : "");
     setProfessionalId(appt?.professional?.id ?? appt?.professionalId ?? "");
     setClient(
       appt?.client?.id
@@ -178,13 +186,17 @@ export function AppointmentForm({
           }),
         });
       }
+      const tattooLivre = isTattoo && tattooFree;
       const body = JSON.stringify({
         professionalId,
         clientId: client!.id,
         startTime: startISO,
-        procedureIds,
+        // Descrição livre não manda procedimentos; caso contrário, os escolhidos.
+        ...(tattooLivre
+          ? { tattooDescription: tattooDesc.trim() }
+          : { procedureIds }),
         notes: notes || undefined,
-        // Tatuagem: fim manual + sessões.
+        // Tatuagem: fim manual + sessões + preço manual.
         ...(isTattoo
           ? {
               endTime: fromZonedTime(end, TZ).toISOString(),
@@ -212,8 +224,14 @@ export function AppointmentForm({
     if (!start) return toast.error("Informe a data e hora de início");
     if (type === "APPOINTMENT") {
       if (!client) return toast.error("Selecione o cliente");
-      if (procedureIds.length === 0)
-        return toast.error("Selecione ao menos um procedimento");
+      if (isTattoo && tattooFree) {
+        if (!tattooDesc.trim())
+          return toast.error("Descreva a tatuagem (ex.: Caveira no braço)");
+      } else if (procedureIds.length === 0) {
+        return toast.error(
+          isTattoo ? "Escolha o tipo de tatuagem" : "Selecione ao menos um procedimento",
+        );
+      }
       if (isTattoo) {
         if (!end) return toast.error("Informe o horário de fim da tatuagem");
         if (fromZonedTime(end, TZ) <= fromZonedTime(start, TZ))
@@ -294,6 +312,24 @@ export function AppointmentForm({
                 <ClientCombobox value={client} onChange={setClient} />
               </div>
 
+              {isTattoo && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                  <Label className="text-sm">Escrever a tatuagem manualmente</Label>
+                  <Switch checked={tattooFree} onCheckedChange={setTattooFree} />
+                </div>
+              )}
+
+              {isTattoo && tattooFree ? (
+                <div className="space-y-1.5">
+                  <Label>Descrição da tatuagem</Label>
+                  <Input
+                    value={tattooDesc}
+                    onChange={(e) => setTattooDesc(e.target.value)}
+                    placeholder="ex.: Caveira no braço"
+                    className="h-11"
+                  />
+                </div>
+              ) : (
               <div className="space-y-1.5">
                 <Label>
                   {isTattoo ? "Tipo de tatuagem" : "Procedimentos"}
@@ -360,6 +396,7 @@ export function AppointmentForm({
                   </p>
                 )}
               </div>
+              )}
 
               {isTattoo && (
                 <div className="space-y-1.5">

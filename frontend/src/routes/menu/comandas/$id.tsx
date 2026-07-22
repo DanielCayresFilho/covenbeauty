@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Sheet,
   SheetContent,
@@ -28,6 +29,7 @@ import {
   SheetTitle,
   SheetFooter,
 } from "@/components/ui/sheet";
+import { Decalque } from "@/components/agenda/decalque";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -53,11 +55,14 @@ interface Comanda {
   appointment: {
     id: string;
     startTime: string;
+    decalqueFilename: string | null;
+    sessionsPlanned: number | null;
+    sessionNumber: number | null;
     professional: { id: string; fullName: string } | null;
   };
   procedures: {
     id: string;
-    procedureId: string;
+    procedureId: string | null;
     nameSnapshot: string;
     priceSnapshot: string;
     durationSnapshot: number;
@@ -146,6 +151,21 @@ function ComandaDetail() {
           {open ? "Aberta" : "Fechada"}
         </span>
       </div>
+
+      {/* Decalque da tatuagem */}
+      {(!!c.appointment.sessionsPlanned ||
+        c.appointment.sessionNumber != null ||
+        !!c.appointment.decalqueFilename ||
+        (c.procedures[0] && !c.procedures[0].procedureId)) && (
+        <section>
+          <Decalque
+            appointmentId={c.appointment.id}
+            decalqueFilename={c.appointment.decalqueFilename}
+            canEdit={open}
+            onChanged={invalidate}
+          />
+        </section>
+      )}
 
       {/* Procedimentos */}
       <section className="space-y-2">
@@ -262,22 +282,21 @@ function AddProcedure({ comandaId, onDone }: { comandaId: string; onDone: () => 
 
   return (
     <div className="flex gap-2">
-      <Select value={procedureId} onValueChange={setProcedureId}>
-        <SelectTrigger className="h-10 flex-1">
-          <SelectValue placeholder="Adicionar procedimento" />
-        </SelectTrigger>
-        <SelectContent>
-          {(list.data?.data ?? []).map((p) => (
-            <SelectItem key={p.id} value={p.id}>
-              {p.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Combobox
+        className="flex-1"
+        value={procedureId}
+        onChange={setProcedureId}
+        placeholder="Adicionar procedimento"
+        searchPlaceholder="Buscar procedimento..."
+        items={(list.data?.data ?? []).map((p) => ({
+          value: p.id,
+          label: p.name,
+        }))}
+      />
       <Button
         variant="secondary"
         size="icon"
-        className="h-10 w-10"
+        className="h-10 w-10 shrink-0"
         disabled={!procedureId || add.isPending}
         onClick={() => add.mutate()}
       >
@@ -318,18 +337,17 @@ function AddProduct({ comandaId, onDone }: { comandaId: string; onDone: () => vo
 
   return (
     <div className="space-y-2 rounded-md border border-dashed border-border p-2">
-      <Select value={productId} onValueChange={setProductId}>
-        <SelectTrigger className="h-10">
-          <SelectValue placeholder="Lançar produto consumido" />
-        </SelectTrigger>
-        <SelectContent>
-          {(list.data?.data ?? []).map((p) => (
-            <SelectItem key={p.id} value={p.id}>
-              {p.name} ({Number(p.usableQuantity).toLocaleString("pt-BR")} {p.measureUnit})
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Combobox
+        value={productId}
+        onChange={setProductId}
+        placeholder="Lançar produto consumido"
+        searchPlaceholder="Buscar produto..."
+        items={(list.data?.data ?? []).map((p) => ({
+          value: p.id,
+          label: p.name,
+          hint: `${Number(p.usableQuantity).toLocaleString("pt-BR")} ${p.measureUnit}`,
+        }))}
+      />
       {productId && (
         <div className="flex gap-2">
           <Input
@@ -503,7 +521,12 @@ function CloseSheet({
                 <div>
                   <Label className="text-xs">Procedimentos do retorno</Label>
                   <div className="mt-1 space-y-1">
-                    {comanda.procedures.map((p) => {
+                    {comanda.procedures
+                      .filter(
+                        (p): p is typeof p & { procedureId: string } =>
+                          !!p.procedureId,
+                      )
+                      .map((p) => {
                       const on = returnIds.includes(p.procedureId);
                       return (
                         <button
