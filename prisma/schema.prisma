@@ -333,6 +333,10 @@ model Appointment {
   sessionsPlanned Int? @map("sessions_planned")
   sessionNumber   Int? @map("session_number")
 
+  // Decalque (stencil) da tatuagem — arquivo no volume persistente.
+  decalqueFilename String? @map("decalque_filename")
+  decalqueMime     String? @map("decalque_mime")
+
   // Retorno: aponta para o agendamento de origem (auto-reagendamento).
   parentId String?       @map("parent_id") @db.Uuid
   parent   Appointment?  @relation("AppointmentReturns", fields: [parentId], references: [id], onDelete: SetNull)
@@ -362,8 +366,9 @@ model AppointmentProcedure {
   appointmentId String      @map("appointment_id") @db.Uuid
   appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
-  procedureId String    @map("procedure_id") @db.Uuid
-  procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  // Nulo em linhas de texto livre (ex.: tatuagem "Caveira no braço").
+  procedureId String?    @map("procedure_id") @db.Uuid
+  procedure   Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
 
   nameSnapshot     String  @map("name_snapshot")
   priceSnapshot    Decimal @map("price_snapshot") @db.Decimal(10, 2)
@@ -421,8 +426,9 @@ model ComandaProcedure {
   comandaId String  @map("comanda_id") @db.Uuid
   comanda   Comanda @relation(fields: [comandaId], references: [id], onDelete: Cascade)
 
-  procedureId String    @map("procedure_id") @db.Uuid
-  procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  // Nulo em linhas de texto livre (ex.: tatuagem manual).
+  procedureId String?    @map("procedure_id") @db.Uuid
+  procedure   Procedure? @relation(fields: [procedureId], references: [id], onDelete: SetNull)
 
   nameSnapshot     String  @map("name_snapshot")
   priceSnapshot    Decimal @map("price_snapshot") @db.Decimal(10, 2)

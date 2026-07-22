@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -38,14 +37,24 @@ export class CreateAppointmentDto {
   @IsDateString({}, { message: 'Data/hora de fim inválida' })
   endTime?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: [String],
-    description: 'IDs dos procedimentos (o fim é calculado pela soma das durações)',
+    description:
+      'IDs dos procedimentos (o fim é a soma das durações). Opcional quando há tattooDescription.',
   })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: 'Informe ao menos um procedimento' })
   @IsUUID('4', { each: true, message: 'Procedimento inválido' })
-  procedureIds: string[];
+  procedureIds?: string[];
+
+  @ApiPropertyOptional({
+    example: 'Caveira no braço',
+    description: 'Tatuagem: descrição livre (dispensa escolher procedimento).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  tattooDescription?: string;
 
   @ApiPropertyOptional({ example: 3, description: 'Tatuagem: nº total de sessões planejadas' })
   @IsOptional()

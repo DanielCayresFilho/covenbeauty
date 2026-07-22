@@ -28,6 +28,9 @@ const COMANDA_INCLUDE = {
       startTime: true,
       depositAmount: true,
       status: true,
+      decalqueFilename: true,
+      sessionsPlanned: true,
+      sessionNumber: true,
       professional: { select: { id: true, fullName: true } },
     },
   },
@@ -348,7 +351,7 @@ export class ComandasService {
     comanda: {
       appointment: { professionalId: string };
       procedures: {
-        procedureId: string;
+        procedureId: string | null;
         nameSnapshot: string;
         priceSnapshot: Prisma.Decimal;
         durationSnapshot: number;

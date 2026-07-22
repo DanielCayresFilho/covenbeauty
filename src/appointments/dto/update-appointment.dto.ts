@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -67,9 +66,14 @@ export class UpdateAppointmentDto {
   @ApiPropertyOptional({ type: [String], description: 'Substitui os procedimentos' })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   procedureIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Tatuagem: descrição livre (substitui os procedimentos)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  tattooDescription?: string;
 
   @ApiPropertyOptional({ enum: AppointmentStatus })
   @IsOptional()

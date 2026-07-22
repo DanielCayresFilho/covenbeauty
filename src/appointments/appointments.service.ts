@@ -19,7 +19,7 @@ import { QueryAppointmentsDto } from './dto/query-appointments.dto';
 import { computeFinancials } from './payment.config';
 
 interface ProcedureSnapshot {
-  procedureId: string;
+  procedureId: string | null; // nulo em linha de texto livre (tatuagem)
   nameSnapshot: string;
   priceSnapshot: Prisma.Decimal;
   durationSnapshot: number;
@@ -55,8 +55,9 @@ export class AppointmentsService {
     await this.assertProfessional(dto.professionalId);
     await this.assertClient(dto.clientId);
 
-    const snapshots = this.applyManualPrice(
-      await this.loadProcedureSnapshots(dto.procedureIds),
+    const snapshots = await this.buildSnapshots(
+      dto.procedureIds,
+      dto.tattooDescription,
       dto.price,
     );
     const start = new Date(dto.startTime);
@@ -255,12 +256,13 @@ export class AppointmentsService {
 
     // Procedimentos e/ou horário: recalcula duração e fim.
     let snapshots: ProcedureSnapshot[] | null = null;
-    if (dto.procedureIds) {
+    if (dto.procedureIds || dto.tattooDescription) {
       if (current.type !== AppointmentType.APPOINTMENT) {
         throw new BadRequestException('Bloqueios não possuem procedimentos');
       }
-      snapshots = this.applyManualPrice(
-        await this.loadProcedureSnapshots(dto.procedureIds),
+      snapshots = await this.buildSnapshots(
+        dto.procedureIds,
+        dto.tattooDescription,
         dto.price,
       );
     }
@@ -408,6 +410,37 @@ export class AppointmentsService {
         durationSnapshot: p.durationMinutes,
       };
     });
+  }
+
+  /**
+   * Monta as linhas do agendamento: uma linha de TEXTO LIVRE (tatuagem, ex.:
+   * "Caveira no braço") quando há `tattooDescription`, senão a partir dos
+   * procedimentos escolhidos (com preço manual opcional sobrepondo o valor).
+   */
+  private async buildSnapshots(
+    procedureIds: string[] | undefined,
+    tattooDescription: string | undefined,
+    price: number | undefined,
+  ): Promise<ProcedureSnapshot[]> {
+    if (tattooDescription?.trim()) {
+      return [
+        {
+          procedureId: null,
+          nameSnapshot: tattooDescription.trim(),
+          priceSnapshot: new Prisma.Decimal(price ?? 0),
+          durationSnapshot: 0,
+        },
+      ];
+    }
+    if (!procedureIds || procedureIds.length === 0) {
+      throw new BadRequestException(
+        'Informe ao menos um procedimento ou a descrição da tatuagem',
+      );
+    }
+    return this.applyManualPrice(
+      await this.loadProcedureSnapshots(procedureIds),
+      price,
+    );
   }
 
   /**
