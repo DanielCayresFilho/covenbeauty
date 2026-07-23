@@ -7,6 +7,12 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import type { AuthUser } from '@/auth/decorators/current-user.decorator';
 import { ownerWhere } from '@/common/ownership';
+import {
+  imagePath,
+  removeImage,
+  saveImage,
+  type UploadedImage,
+} from '@/common/uploads';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
@@ -130,8 +136,43 @@ export class ProductsService {
   }
 
   async remove(id: string, user: AuthUser) {
-    await this.findOne(id, user);
+    const product = await this.findOne(id, user);
     await this.prisma.product.delete({ where: { id } });
+    if (product.imageFilename) await removeImage('products', product.imageFilename);
+    return { deleted: true, id };
+  }
+
+  // ─────────────── Imagem ───────────────
+
+  async setImage(id: string, file: UploadedImage | undefined, user: AuthUser) {
+    const product = await this.findOne(id, user);
+    const saved = await saveImage('products', file);
+    if (product.imageFilename) await removeImage('products', product.imageFilename);
+    return this.prisma.product.update({
+      where: { id },
+      data: { imageFilename: saved.filename, imageMime: saved.mimeType },
+      include: { category: true },
+    });
+  }
+
+  async imageOf(id: string, user: AuthUser) {
+    const product = await this.findOne(id, user);
+    if (!product.imageFilename) {
+      throw new NotFoundException('Produto sem imagem');
+    }
+    return {
+      path: imagePath('products', product.imageFilename),
+      mimeType: product.imageMime ?? 'image/jpeg',
+    };
+  }
+
+  async clearImage(id: string, user: AuthUser) {
+    const product = await this.findOne(id, user);
+    if (product.imageFilename) await removeImage('products', product.imageFilename);
+    await this.prisma.product.update({
+      where: { id },
+      data: { imageFilename: null, imageMime: null },
+    });
     return { deleted: true, id };
   }
 

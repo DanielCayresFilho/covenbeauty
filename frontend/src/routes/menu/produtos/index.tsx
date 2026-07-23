@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -9,7 +9,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Search, Trash2, Tag, PackagePlus } from "lucide-react";
+import { Plus, Search, Trash2, Tag, PackagePlus, Image as ImageIcon, Camera } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { AuthImage } from "@/components/ui/auth-image";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,7 @@ interface Product {
   categoryId: string;
   category: { id: string; name: string };
   ownerId: string | null;
+  imageFilename: string | null;
 }
 interface Paginated<T> {
   data: T[];
@@ -186,8 +188,19 @@ function Produtos() {
           {query.data!.data.map((p) => (
             <button key={p.id} onClick={() => setSheet(p)} className="w-full text-left">
               <Card className="border-border bg-card/60 p-3 transition-colors hover:border-blood/50">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="flex items-start gap-3">
+                  {p.imageFilename ? (
+                    <AuthImage
+                      path={`/products/${p.id}/image/file`}
+                      alt={p.name}
+                      className="h-12 w-12 shrink-0 rounded-md border border-border"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground">
+                      <ImageIcon className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-parchment">{p.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {p.category.name} · {typeLabel(p.type)}
@@ -271,6 +284,9 @@ function ProductSheet({
 }) {
   const qc = useQueryClient();
   const isEdit = !!product;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const {
     register,
@@ -282,6 +298,8 @@ function ProductSheet({
 
   useEffect(() => {
     if (!open) return;
+    setImageFile(null);
+    setImagePreview(null);
     reset({
       name: product?.name ?? "",
       description: product?.description ?? "",
@@ -294,8 +312,18 @@ function ProductSheet({
     });
   }, [open, product, reset]);
 
+  const pickImage = (file?: File) => {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máximo 8 MB)");
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
   const save = useMutation({
-    mutationFn: (v: z.output<typeof productSchema>) => {
+    mutationFn: async (v: z.output<typeof productSchema>) => {
       const base = {
         name: v.name,
         description: v.description || undefined,
@@ -305,15 +333,22 @@ function ProductSheet({
         quantityPerUnit: v.quantityPerUnit,
         measureUnit: v.measureUnit,
       };
-      return isEdit
-        ? apiFetch(`/products/${product!.id}`, {
+      const saved = isEdit
+        ? await apiFetch<{ id: string }>(`/products/${product!.id}`, {
             method: "PATCH",
             body: JSON.stringify(base),
           })
-        : apiFetch("/products", {
+        : await apiFetch<{ id: string }>("/products", {
             method: "POST",
             body: JSON.stringify({ ...base, unitsInStock: v.unitsInStock ?? 0 }),
           });
+      // Imagem escolhida: envia após salvar (já existe id).
+      if (imageFile && saved?.id) {
+        const fd = new FormData();
+        fd.append("file", imageFile);
+        await apiFetch(`/products/${saved.id}/image`, { method: "POST", body: fd });
+      }
+      return saved;
     },
     onSuccess: () => {
       toast.success(isEdit ? "Produto atualizado" : "Produto cadastrado ✦");
@@ -348,6 +383,46 @@ function ProductSheet({
           onSubmit={handleSubmit((v) => save.mutate(v as z.output<typeof productSchema>))}
           className="space-y-4 px-4 pb-4"
         >
+          {/* Imagem do produto */}
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                pickImage(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            {imagePreview ? (
+              <img
+                src={imagePreview}
+                alt="Prévia"
+                className="h-16 w-16 shrink-0 rounded-md border border-border object-cover"
+              />
+            ) : product?.imageFilename ? (
+              <AuthImage
+                path={`/products/${product.id}/image/file`}
+                alt={product.name}
+                className="h-16 w-16 shrink-0 rounded-md border border-border"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-secondary text-muted-foreground">
+                <ImageIcon className="h-6 w-6" />
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 gap-2"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Camera className="h-4 w-4" />
+              {product?.imageFilename || imagePreview ? "Trocar imagem" : "Adicionar imagem"}
+            </Button>
+          </div>
+
           <Field label="Nome" error={errors.name?.message}>
             <Input className="h-11" {...register("name")} />
           </Field>

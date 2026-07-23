@@ -1,3 +1,4 @@
+import type { Response } from 'express';
 import {
   Body,
   Controller,
@@ -8,15 +9,25 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { RestockProductDto } from './dto/restock-product.dto';
+import { MAX_UPLOAD_BYTES, type UploadedImage } from '@/common/uploads';
 import { AuthUser, CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { RolesGuard } from '@/auth/guards/roles.guard';
@@ -71,5 +82,42 @@ export class ProductsController {
   @ApiOperation({ summary: 'Remove um produto' })
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.products.remove(id, user);
+  }
+
+  // ─────────────── Imagem do produto ───────────────
+
+  @Post(':id/image')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Anexa/atualiza a imagem do produto' })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+  )
+  setImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedImage | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.products.setImage(id, file, user);
+  }
+
+  @Get(':id/image/file')
+  @ApiOperation({ summary: 'Baixa a imagem do produto (autenticado)' })
+  async imageFile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
+    const { path, mimeType } = await this.products.imageOf(id, user);
+    res.type(mimeType);
+    res.sendFile(path);
+  }
+
+  @Delete(':id/image')
+  @ApiOperation({ summary: 'Remove a imagem do produto' })
+  removeImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.products.clearImage(id, user);
   }
 }

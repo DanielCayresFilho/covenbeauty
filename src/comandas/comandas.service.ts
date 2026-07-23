@@ -242,6 +242,26 @@ export class ComandasService {
 
   // ─────────────────────────── Fechamento ───────────────────────────
 
+  /** Reabre uma comanda fechada (sai do faturamento até fechar de novo). */
+  async reopen(comandaId: string) {
+    const comanda = await this.prisma.comanda.findUnique({
+      where: { id: comandaId },
+      select: { id: true, status: true },
+    });
+    if (!comanda) {
+      throw new NotFoundException('Comanda não encontrada');
+    }
+    if (comanda.status === ComandaStatus.OPEN) {
+      throw new ConflictException('Comanda já está aberta');
+    }
+    const updated = await this.prisma.comanda.update({
+      where: { id: comandaId },
+      data: { status: ComandaStatus.OPEN, closedAt: null },
+      include: COMANDA_INCLUDE,
+    });
+    return { ...updated, summary: this.buildSummary(updated) };
+  }
+
   async close(comandaId: string, dto: CloseComandaDto, userId?: string) {
     const comanda = await this.prisma.comanda.findUnique({
       where: { id: comandaId },

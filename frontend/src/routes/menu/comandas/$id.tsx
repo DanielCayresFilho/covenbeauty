@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Check } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Check, RotateCcw } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -108,6 +108,16 @@ function ComandaDetail() {
     void qc.invalidateQueries({ queryKey: ["comandas"] });
     void qc.invalidateQueries({ queryKey: ["products"] });
   };
+
+  const reopen = useMutation({
+    mutationFn: () => apiFetch(`/comandas/${id}/reopen`, { method: "POST" }),
+    onSuccess: () => {
+      toast.success("Comanda reaberta");
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível reabrir"),
+  });
 
   if (query.isLoading) {
     return <Skeleton className="h-96 rounded-lg" />;
@@ -237,9 +247,19 @@ function ComandaDetail() {
         )}
       </Card>
 
-      {open && (
+      {open ? (
         <Button className="h-12 w-full text-base" onClick={() => setCloseOpen(true)}>
           Fechar comanda
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          className="h-12 w-full gap-2 text-base"
+          disabled={reopen.isPending}
+          onClick={() => reopen.mutate()}
+        >
+          <RotateCcw className="h-4 w-4" />
+          {reopen.isPending ? "Reabrindo..." : "Reabrir comanda"}
         </Button>
       )}
 

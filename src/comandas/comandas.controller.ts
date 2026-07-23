@@ -93,6 +93,12 @@ export class ComandasController {
     return this.comandas.close(id, dto, userId);
   }
 
+  @Post(':id/reopen')
+  @ApiOperation({ summary: 'Reabre uma comanda fechada' })
+  reopen(@Param('id', ParseUUIDPipe) id: string) {
+    return this.comandas.reopen(id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: '[ADMIN] Exclui uma comanda aberta (estorna estoque)' })
   remove(@Param('id', ParseUUIDPipe) id: string) {

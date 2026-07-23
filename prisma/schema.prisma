@@ -230,6 +230,10 @@ model Product {
 
   isActive Boolean @default(true) @map("is_active")
 
+  // Imagem do produto (arquivo no volume persistente).
+  imageFilename String? @map("image_filename")
+  imageMime     String? @map("image_mime")
+
   categoryId String   @map("category_id") @db.Uuid
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
