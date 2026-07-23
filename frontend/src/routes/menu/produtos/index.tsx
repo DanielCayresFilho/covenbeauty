@@ -103,8 +103,9 @@ function Produtos() {
   const debounced = useDebounce(search);
   const [sheet, setSheet] = useState<Product | "new" | null>(null);
   const [catsOpen, setCatsOpen] = useState(false);
+  const [categoryId, setCategoryId] = useState("all");
 
-  useEffect(() => setPage(1), [debounced]);
+  useEffect(() => setPage(1), [debounced, categoryId]);
 
   const categories = useQuery({
     queryKey: ["categories"],
@@ -113,10 +114,11 @@ function Produtos() {
   });
 
   const query = useQuery({
-    queryKey: ["products", debounced, page],
+    queryKey: ["products", debounced, page, categoryId],
     queryFn: () =>
       apiFetch<Paginated<Product>>(
-        `/products?search=${encodeURIComponent(debounced)}&page=${page}&limit=20`,
+        `/products?search=${encodeURIComponent(debounced)}&page=${page}&limit=20` +
+          (categoryId !== "all" ? `&categoryId=${categoryId}` : ""),
       ),
     retry: false,
   });
@@ -140,14 +142,29 @@ function Produtos() {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar produto"
-          className="h-11 pl-9"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar produto"
+            className="h-11 pl-9"
+          />
+        </div>
+        <Select value={categoryId} onValueChange={setCategoryId}>
+          <SelectTrigger className="h-11 w-40 shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas categorias</SelectItem>
+            {(categories.data ?? []).map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                {cat.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {query.isLoading ? (

@@ -171,6 +171,7 @@ model Client {
   birthDate DateTime @map("birth_date") @db.Date
   phone     String
   email     String?
+  instagram String? // @usuario (sem o @, normalizado no serviço)
   address   String?
   notes     String? // Observações
   isActive  Boolean  @default(true) @map("is_active")

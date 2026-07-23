@@ -7,6 +7,18 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { QueryClientsDto } from './dto/query-clients.dto';
 
+/** Normaliza o Instagram: remove @, espaços e a URL, guarda só o usuário. */
+function normalizeInstagram(v?: string): string | null {
+  if (v == null) return null;
+  const handle = v
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+    .replace(/\/+$/, '')
+    .replace(/^@/, '')
+    .trim();
+  return handle || null;
+}
+
 @Injectable()
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -20,6 +32,7 @@ export class ClientsService {
         birthDate: new Date(dto.birthDate),
         phone: dto.phone,
         email: dto.email?.toLowerCase(),
+        instagram: normalizeInstagram(dto.instagram),
         address: dto.address,
         notes: dto.notes,
         createdById: user.id,
@@ -78,6 +91,10 @@ export class ClientsService {
         birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
         phone: dto.phone,
         email: dto.email?.toLowerCase(),
+        instagram:
+          dto.instagram !== undefined
+            ? normalizeInstagram(dto.instagram)
+            : undefined,
         address: dto.address,
         notes: dto.notes,
         // Reatribuição de dono: exclusiva do admin.

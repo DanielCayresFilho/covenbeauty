@@ -391,12 +391,14 @@ function ListView({
   onSelect: (a: Appt) => void;
   professionalId: string;
 }) {
+  // Mês navegável (0 = mês atual) — permite ver retornos/agendamentos futuros.
+  const [monthOffset, setMonthOffset] = useState(0);
   const range = useMemo(() => {
     const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const to = new Date(from.getTime() + 14 * 86_400_000);
-    return { from: from.toISOString(), to: to.toISOString() };
-  }, []);
+    const from = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0, 23, 59, 59);
+    return { from: from.toISOString(), to: to.toISOString(), label: from };
+  }, [monthOffset]);
 
   const query = useQuery({
     queryKey: ["appointments", "list", range.from, range.to],
@@ -419,31 +421,43 @@ function ListView({
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [query.data, professionalId]);
 
+  const header = (
+    <div className="flex items-center justify-center gap-1">
+      <Button variant="outline" size="icon" onClick={() => setMonthOffset((m) => m - 1)}>
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span className="min-w-40 text-center text-sm capitalize text-parchment">
+        {fmt(range.from, "MMMM 'de' yyyy")}
+      </span>
+      <Button variant="outline" size="icon" onClick={() => setMonthOffset((m) => m + 1)}>
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  let body: React.ReactNode;
   if (query.isLoading) {
-    return (
+    body = (
       <div className="space-y-2">
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
     );
-  }
-  if (query.isError) {
-    return (
+  } else if (query.isError) {
+    body = (
       <Card className="border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
         Não foi possível carregar. Verifique se o servidor está no ar.
       </Card>
     );
-  }
-  if (grouped.length === 0) {
-    return (
+  } else if (grouped.length === 0) {
+    body = (
       <Card className="border-dashed border-border bg-transparent p-8 text-center text-sm text-muted-foreground">
-        Nenhum agendamento nos próximos 14 dias.
+        Nenhum agendamento neste mês.
       </Card>
     );
-  }
-
-  return (
+  } else {
+    body = (
     <div className="space-y-5">
       {grouped.map(([day, items]) => (
         <div key={day}>
@@ -485,6 +499,14 @@ function ListView({
           </div>
         </div>
       ))}
+    </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {header}
+      {body}
     </div>
   );
 }

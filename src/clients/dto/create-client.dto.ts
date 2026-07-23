@@ -33,6 +33,12 @@ export class CreateClientDto {
   @IsEmail({}, { message: 'E-mail inválido' })
   email?: string;
 
+  @ApiPropertyOptional({ example: '@morgana', description: 'Instagram (@usuario)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  instagram?: string;
+
   @ApiPropertyOptional({ example: 'Rua das Bruxas, 13 - Centro', description: 'Endereço (opcional)' })
   @IsOptional()
   @IsString()

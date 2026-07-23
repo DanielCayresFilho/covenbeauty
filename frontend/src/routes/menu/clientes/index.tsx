@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Search, Phone, Trash2, FileText } from "lucide-react";
+import { Plus, Search, Phone, AtSign, Trash2, FileText } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ interface Client {
   birthDate: string;
   phone: string;
   email: string | null;
+  instagram: string | null;
   address: string | null;
   notes: string | null;
   ownerId: string | null;
@@ -171,6 +172,11 @@ function Clientes() {
                   <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                     <Phone className="h-3 w-3" /> {c.phone}
                   </p>
+                  {c.instagram && (
+                    <p className="flex items-center gap-1 truncate text-xs text-blood">
+                      <AtSign className="h-3 w-3" /> {c.instagram}
+                    </p>
+                  )}
                 </div>
               </Card>
             </button>
@@ -221,6 +227,7 @@ const schema = z.object({
     .transform((v) => v.replace(/[^\d+]/g, ""))
     .refine((v) => /^\+?[1-9]\d{7,14}$/.test(v), "Telefone inválido"),
   email: z.string().email("E-mail inválido").or(z.literal("")).optional(),
+  instagram: z.string().max(60).optional(),
   address: z.string().max(255).optional(),
   notes: z.string().max(1000).optional(),
 });
@@ -259,6 +266,7 @@ function ClientSheet({
       birthDate: client?.birthDate ? client.birthDate.slice(0, 10) : "",
       phone: client?.phone ?? "",
       email: client?.email ?? "",
+      instagram: client?.instagram ? `@${client.instagram}` : "",
       address: client?.address ?? "",
       notes: client?.notes ?? "",
     });
@@ -270,6 +278,7 @@ function ClientSheet({
       const body = JSON.stringify({
         ...values,
         email: values.email || undefined,
+        instagram: values.instagram ?? "",
         address: values.address || undefined,
         notes: values.notes || undefined,
         // Só o admin atribui o dono; o backend ignora para os demais.
@@ -332,6 +341,9 @@ function ClientSheet({
           </Field>
           <Field label="E-mail (opcional)" error={errors.email?.message}>
             <Input type="email" className="h-11" {...register("email")} />
+          </Field>
+          <Field label="Instagram (opcional)" error={errors.instagram?.message}>
+            <Input placeholder="@usuario" className="h-11" {...register("instagram")} />
           </Field>
           <Field label="Endereço (opcional)" error={errors.address?.message}>
             <Input className="h-11" {...register("address")} />
