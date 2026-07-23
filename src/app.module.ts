@@ -14,6 +14,7 @@ import { ProductsModule } from './products/products.module';
 import { ProcedureCategoriesModule } from './procedure-categories/procedure-categories.module';
 import { ProceduresModule } from './procedures/procedures.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { RecurringBlocksModule } from './recurring-blocks/recurring-blocks.module';
 import { ComandasModule } from './comandas/comandas.module';
 import { FinancialModule } from './financial/financial.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
@@ -46,6 +47,7 @@ import { AppController } from './app.controller';
     ProcedureCategoriesModule,
     ProceduresModule,
     AppointmentsModule,
+    RecurringBlocksModule,
     ComandasModule,
     FinancialModule,
     EvaluationsModule,

@@ -11,6 +11,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Lock,
 } from "lucide-react";
 
 import FullCalendar from "@fullcalendar/react";
@@ -128,6 +129,26 @@ const LEGEND = [
   { label: "Bloqueado", color: BLOCK_COLOR },
 ];
 
+interface RecurringBlock {
+  id: string;
+  professionalId: string;
+  weekday: number;
+  startMinute: number;
+  endMinute: number;
+  note: string | null;
+}
+const WEEKDAYS = [
+  "Domingo",
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+];
+const minToHHMM = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
 const fmt = (iso: string, pattern: string) =>
   formatInTimeZone(new Date(iso), TZ, pattern, { locale: ptBR });
 const apptColor = (a: Appt) =>
@@ -139,7 +160,15 @@ const apptProcedures = (a: Appt) =>
 
 /** Conteúdo de cada evento: cliente + profissional + procedimento, bem claro. */
 function renderEventContent(arg: EventContentArg) {
-  const a = arg.event.extendedProps.appt as Appt;
+  const a = arg.event.extendedProps.appt as Appt | undefined;
+  if (!a) {
+    // Bloqueio fixo (evento de fundo).
+    return (
+      <div className="fc-cb-event">
+        <div className="fc-cb-sub">🔒 {arg.event.title}</div>
+      </div>
+    );
+  }
   const procs = apptProcedures(a);
   return (
     <div className="fc-cb-event">
@@ -170,6 +199,7 @@ function Agenda() {
     appt: null,
   });
   const [mounted, setMounted] = useState(false);
+  const [blocksOpen, setBlocksOpen] = useState(false);
   // Agenda é compartilhada: dá para focar em um profissional quando lota.
   const [professionalId, setProfessionalId] = useState("all");
   useEffect(() => setMounted(true), []);
@@ -191,6 +221,14 @@ function Agenda() {
           <h1 className="mt-1 font-serif text-3xl text-parchment">Agenda</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            title="Bloqueios fixos"
+            onClick={() => setBlocksOpen(true)}
+          >
+            <Lock className="h-4 w-4" />
+          </Button>
           <Button
             size="sm"
             className="gap-1"
@@ -265,7 +303,185 @@ function Agenda() {
         appt={form.appt}
         onClose={() => setForm({ open: false, appt: null })}
       />
+
+      <RecurringBlocksSheet
+        open={blocksOpen}
+        onClose={() => setBlocksOpen(false)}
+        professionals={professionals.data ?? []}
+      />
     </div>
+  );
+}
+
+// ─────────────── Bloqueios fixos (recorrentes) ───────────────
+
+function RecurringBlocksSheet({
+  open,
+  onClose,
+  professionals,
+}: {
+  open: boolean;
+  onClose: () => void;
+  professionals: { id: string; fullName: string }[];
+}) {
+  const qc = useQueryClient();
+  const [professionalId, setProfessionalId] = useState("");
+  const [weekday, setWeekday] = useState("6");
+  const [start, setStart] = useState("09:00");
+  const [end, setEnd] = useState("11:00");
+  const [note, setNote] = useState("");
+
+  const list = useQuery({
+    queryKey: ["recurring-blocks"],
+    queryFn: () => apiFetch<RecurringBlock[]>("/recurring-blocks"),
+    enabled: open,
+    retry: false,
+  });
+
+  const proById = new Map(professionals.map((p) => [p.id, p.fullName]));
+
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const create = useMutation({
+    mutationFn: () =>
+      apiFetch("/recurring-blocks", {
+        method: "POST",
+        body: JSON.stringify({
+          professionalId,
+          weekday: Number(weekday),
+          startMinute: toMin(start),
+          endMinute: toMin(end),
+          note: note || undefined,
+        }),
+      }),
+    onSuccess: () => {
+      toast.success("Bloqueio fixo criado ✦");
+      setNote("");
+      void qc.invalidateQueries({ queryKey: ["recurring-blocks"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível criar"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/recurring-blocks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Bloqueio removido");
+      void qc.invalidateQueries({ queryKey: ["recurring-blocks"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Falha ao remover"),
+  });
+
+  const submit = () => {
+    if (!professionalId) return toast.error("Selecione o profissional");
+    if (toMin(end) <= toMin(start))
+      return toast.error("O fim deve ser após o início");
+    create.mutate();
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle className="font-serif text-2xl text-parchment">
+            Bloqueios fixos
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="space-y-4 px-4 pb-4">
+          <p className="text-xs text-muted-foreground">
+            Ex.: todo sábado das 09h às 11h. Impede novos agendamentos no horário.
+          </p>
+
+          <div className="space-y-1.5">
+            <Label>Profissional</Label>
+            <Select value={professionalId} onValueChange={setProfessionalId}>
+              <SelectTrigger className="h-11">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {professionals.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Dia da semana</Label>
+            <Select value={weekday} onValueChange={setWeekday}>
+              <SelectTrigger className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WEEKDAYS.map((w, i) => (
+                  <SelectItem key={i} value={String(i)}>
+                    {w}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 space-y-1.5">
+              <Label>Início</Label>
+              <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="h-11" />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <Label>Fim</Label>
+              <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="h-11" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Observação (opcional)</Label>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex.: Almoço" className="h-11" />
+          </div>
+
+          <Button onClick={submit} disabled={create.isPending} className="h-11 w-full">
+            {create.isPending ? "Salvando..." : "Adicionar bloqueio"}
+          </Button>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            {(list.data ?? []).length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">
+                Nenhum bloqueio fixo ainda.
+              </p>
+            ) : (
+              (list.data ?? []).map((b) => (
+                <Card key={b.id} className="flex items-center gap-3 border-border bg-card/60 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-parchment">
+                      {WEEKDAYS[b.weekday]} · {minToHHMM(b.startMinute)}–{minToHHMM(b.endMinute)}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {proById.get(b.professionalId) ?? "Profissional"}
+                      {b.note ? ` · ${b.note}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => remove.mutate(b.id)}
+                    className="shrink-0 rounded p-1.5 text-destructive hover:bg-destructive/10"
+                    aria-label="Remover"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -293,23 +509,41 @@ function CalendarView({
     retry: false,
   });
 
-  const events = useMemo(
-    () =>
-      (query.data?.data ?? [])
-        .filter(
-          (a) => professionalId === "all" || a.professional?.id === professionalId,
-        )
-        .map((a) => ({
-          id: a.id,
-          title: apptTitle(a),
-          start: a.startTime,
-          end: a.endTime,
-          backgroundColor: apptColor(a),
-          borderColor: "transparent",
-          extendedProps: { appt: a },
-        })),
-    [query.data, professionalId],
-  );
+  const blocksQuery = useQuery({
+    queryKey: ["recurring-blocks"],
+    queryFn: () => apiFetch<RecurringBlock[]>("/recurring-blocks"),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const events = useMemo(() => {
+    const appts = (query.data?.data ?? [])
+      .filter(
+        (a) => professionalId === "all" || a.professional?.id === professionalId,
+      )
+      .map((a) => ({
+        id: a.id,
+        title: apptTitle(a),
+        start: a.startTime,
+        end: a.endTime,
+        backgroundColor: apptColor(a),
+        borderColor: "transparent",
+        extendedProps: { appt: a },
+      }));
+    // Bloqueios fixos (recorrentes) como eventos de fundo.
+    const blocks = (blocksQuery.data ?? [])
+      .filter((b) => professionalId === "all" || b.professionalId === professionalId)
+      .map((b) => ({
+        daysOfWeek: [b.weekday],
+        startTime: minToHHMM(b.startMinute),
+        endTime: minToHHMM(b.endMinute),
+        display: "background" as const,
+        backgroundColor: BLOCK_COLOR,
+        title: b.note ?? "Bloqueado",
+        extendedProps: { recurring: true },
+      }));
+    return [...appts, ...blocks];
+  }, [query.data, blocksQuery.data, professionalId]);
 
   const api = () => calRef.current?.getApi();
   const changeView = (v: "timeGridDay" | "timeGridWeek") => {
@@ -369,9 +603,10 @@ function CalendarView({
           slotEventOverlap={false}
           events={events}
           eventContent={renderEventContent}
-          eventClick={(arg: EventClickArg) =>
-            onSelect(arg.event.extendedProps.appt as Appt)
-          }
+          eventClick={(arg: EventClickArg) => {
+            const a = arg.event.extendedProps.appt as Appt | undefined;
+            if (a) onSelect(a);
+          }}
           datesSet={(arg: DatesSetArg) => {
             setRange({ from: arg.startStr, to: arg.endStr });
             setTitle(arg.view.title);

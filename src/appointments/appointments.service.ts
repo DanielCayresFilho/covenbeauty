@@ -509,5 +509,42 @@ export class AppointmentsService {
         'O profissional já possui um registro nesse horário',
       );
     }
+
+    await this.assertNoRecurringBlock(professionalId, start, end);
+  }
+
+  /**
+   * Impede agendar dentro de um bloqueio fixo (ex.: todo sábado 09h-11h).
+   * SP é UTC-3 sem horário de verão desde 2019.
+   */
+  private async assertNoRecurringBlock(
+    professionalId: string,
+    start: Date,
+    end: Date,
+  ) {
+    const OFFSET = 3 * 60 * 60 * 1000; // UTC-3 (America/Sao_Paulo)
+    const ls = new Date(start.getTime() - OFFSET);
+    const le = new Date(end.getTime() - OFFSET);
+    const weekday = ls.getUTCDay();
+    const startMin = ls.getUTCHours() * 60 + ls.getUTCMinutes();
+    // Se o fim cai em outro dia (cruzou a meia-noite), considera até o fim do dia.
+    const endMin =
+      le.getUTCDay() === weekday
+        ? le.getUTCHours() * 60 + le.getUTCMinutes()
+        : 1440;
+
+    const blocks = await this.prisma.recurringBlock.findMany({
+      where: { professionalId, weekday },
+    });
+    const hit = blocks.find(
+      (b) => startMin < b.endMinute && endMin > b.startMinute,
+    );
+    if (hit) {
+      const hh = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      throw new ConflictException(
+        `Horário dentro de um bloqueio fixo (${hh(hit.startMinute)}–${hh(hit.endMinute)})`,
+      );
+    }
   }
 }

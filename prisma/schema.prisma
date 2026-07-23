@@ -700,6 +700,24 @@ model CashFlowOpening {
   @@map("cash_flow_openings")
 }
 
+/// Bloqueio fixo/recorrente da agenda (ex.: todo sábado das 09h às 11h).
+/// professionalId é campo plano (sem FK) — profissionais são desativados, não removidos.
+model RecurringBlock {
+  id             String  @id @default(uuid()) @db.Uuid
+  professionalId String  @map("professional_id") @db.Uuid
+  weekday        Int // 0=Domingo .. 6=Sábado
+  startMinute    Int     @map("start_minute") // minutos desde a meia-noite (local)
+  endMinute      Int     @map("end_minute")
+  note           String?
+  ownerId        String? @map("owner_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([professionalId])
+  @@index([ownerId])
+  @@map("recurring_blocks")
+}
+
 /// Meta financeira: valor-alvo de entradas num intervalo de datas.
 model FinancialGoal {
   id           String   @id @default(uuid()) @db.Uuid
