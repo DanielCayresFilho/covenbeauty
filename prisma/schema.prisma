@@ -389,9 +389,12 @@ model Comanda {
   id     String        @id @default(uuid()) @db.Uuid
   status ComandaStatus @default(OPEN)
 
-  // 1:1 com o agendamento que a originou.
-  appointmentId String      @unique @map("appointment_id") @db.Uuid
-  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  // 1:1 com o agendamento que a originou. NULO em comandas de VENDA (balcão).
+  appointmentId String?      @unique @map("appointment_id") @db.Uuid
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  // Vendedor da comanda de venda (sem agendamento) — usado no escopo/faturamento.
+  sellerId String? @map("seller_id") @db.Uuid
 
   clientId String? @map("client_id") @db.Uuid
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -454,8 +457,11 @@ model ComandaProduct {
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   nameSnapshot String      @map("name_snapshot")
-  quantityUsed Decimal     @map("quantity_used") @db.Decimal(12, 3) // ex.: 150 (ml)
+  quantityUsed Decimal     @map("quantity_used") @db.Decimal(12, 3) // consumo (ml/g) ou nº de unidades (venda)
   measureUnit  MeasureUnit @map("measure_unit")
+
+  // Preço UNITÁRIO na venda (nulo em consumo interno). Total da linha = preço × quantidade.
+  priceSnapshot Decimal? @map("price_snapshot") @db.Decimal(10, 2)
 
   createdAt DateTime @default(now()) @map("created_at")
 

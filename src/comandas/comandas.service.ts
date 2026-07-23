@@ -14,11 +14,14 @@ import {
 import { PrismaService } from '@/prisma/prisma.service';
 import { computeFinancials } from '@/appointments/payment.config';
 import { deriveUnitsInStock } from '@/products/stock.util';
+import type { AuthUser } from '@/auth/decorators/current-user.decorator';
 import { OpenComandaDto } from './dto/open-comanda.dto';
 import { AddComandaProcedureDto } from './dto/add-procedure.dto';
 import { AddComandaProductDto } from './dto/add-product.dto';
 import { CloseComandaDto } from './dto/close-comanda.dto';
 import { QueryComandasDto } from './dto/query-comandas.dto';
+import { CreateSaleDto } from './dto/create-sale.dto';
+import { AddSaleProductDto } from './dto/add-sale-product.dto';
 
 const COMANDA_INCLUDE = {
   client: { select: { id: true, fullName: true, phone: true } },
@@ -76,6 +79,70 @@ export class ComandasService {
       },
       include: COMANDA_INCLUDE,
     });
+  }
+
+  // ─────────────────────────── Venda de balcão ───────────────────────────
+
+  /** Abre uma comanda de VENDA (sem agendamento). */
+  async createSale(dto: CreateSaleDto, user: AuthUser) {
+    if (dto.clientId) {
+      const client = await this.prisma.client.findUnique({
+        where: { id: dto.clientId },
+        select: { id: true },
+      });
+      if (!client) {
+        throw new BadRequestException('Cliente informado não existe');
+      }
+    }
+    return this.prisma.comanda.create({
+      data: { clientId: dto.clientId ?? null, sellerId: user.id },
+      include: COMANDA_INCLUDE,
+    });
+  }
+
+  /** Vende um produto na comanda (baixa unidades, registra preço). */
+  async sellProduct(comandaId: string, dto: AddSaleProductDto) {
+    await this.assertOpen(comandaId);
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: dto.productId },
+    });
+    if (!product) {
+      throw new BadRequestException('Produto não encontrado');
+    }
+    if (dto.quantity > product.unitsInStock) {
+      throw new BadRequestException(
+        `Estoque insuficiente: ${product.unitsInStock} unidade(s) disponível(is)`,
+      );
+    }
+
+    const consumed = product.quantityPerUnit.mul(dto.quantity);
+    const usableQuantity = Prisma.Decimal.max(
+      product.usableQuantity.minus(consumed),
+      new Prisma.Decimal(0),
+    );
+
+    await this.prisma.$transaction([
+      this.prisma.comandaProduct.create({
+        data: {
+          comandaId,
+          productId: product.id,
+          nameSnapshot: product.name,
+          quantityUsed: new Prisma.Decimal(dto.quantity),
+          measureUnit: product.measureUnit,
+          priceSnapshot: product.price, // preço unitário
+        },
+      }),
+      this.prisma.product.update({
+        where: { id: product.id },
+        data: {
+          usableQuantity,
+          unitsInStock: deriveUnitsInStock(usableQuantity, product.quantityPerUnit),
+        },
+      }),
+    ]);
+
+    return this.findOne(comandaId);
   }
 
   // ─────────────────────────── Consultas ───────────────────────────
@@ -267,6 +334,7 @@ export class ComandasService {
       where: { id: comandaId },
       include: {
         procedures: true,
+        products: true,
         appointment: {
           select: { id: true, depositAmount: true, professionalId: true },
         },
@@ -278,18 +346,18 @@ export class ComandasService {
     if (comanda.status === ComandaStatus.CLOSED) {
       throw new ConflictException('Comanda já está fechada');
     }
-    if (comanda.procedures.length === 0) {
-      throw new BadRequestException('A comanda não possui procedimentos');
+    const productRevenue = this.productsRevenue(comanda.products);
+    if (comanda.procedures.length === 0 && productRevenue.isZero()) {
+      throw new BadRequestException('A comanda não possui itens');
     }
 
-    const subtotal = comanda.procedures.reduce(
-      (acc, p) => acc.plus(p.priceSnapshot),
-      new Prisma.Decimal(0),
-    );
+    const subtotal = comanda.procedures
+      .reduce((acc, p) => acc.plus(p.priceSnapshot), new Prisma.Decimal(0))
+      .plus(productRevenue);
     const discount = new Prisma.Decimal(dto.discount ?? 0);
     const total = Prisma.Decimal.max(subtotal.minus(discount), new Prisma.Decimal(0));
 
-    const deposit = comanda.appointment.depositAmount;
+    const deposit = comanda.appointment?.depositAmount ?? new Prisma.Decimal(0);
     const amountDue = Prisma.Decimal.max(total.minus(deposit), new Prisma.Decimal(0));
 
     const installments =
@@ -325,11 +393,13 @@ export class ComandasService {
           include: COMANDA_INCLUDE,
         });
 
-        // Fechar a comanda conclui o atendimento.
-        await tx.appointment.update({
-          where: { id: comanda.appointmentId },
-          data: { status: AppointmentStatus.COMPLETED },
-        });
+        // Fechar a comanda conclui o atendimento (comanda de venda não tem um).
+        if (comanda.appointmentId) {
+          await tx.appointment.update({
+            where: { id: comanda.appointmentId },
+            data: { status: AppointmentStatus.COMPLETED },
+          });
+        }
 
         // Cria o agendamento de retorno (se informado), ligado à origem.
         let created: unknown = null;
@@ -369,7 +439,7 @@ export class ComandasService {
   /** Valida e monta o agendamento de retorno a partir dos procedimentos da comanda. */
   private async prepareReturn(
     comanda: {
-      appointment: { professionalId: string };
+      appointment: { professionalId: string } | null;
       procedures: {
         procedureId: string | null;
         nameSnapshot: string;
@@ -379,6 +449,9 @@ export class ComandasService {
     },
     dto: CloseComandaDto,
   ) {
+    if (!comanda.appointment) {
+      throw new BadRequestException('Comanda de venda não gera retorno');
+    }
     if (!dto.returnDate || !dto.returnProcedureIds?.length) {
       throw new BadRequestException(
         'Para o retorno, informe a data e os procedimentos',
@@ -502,21 +575,32 @@ export class ComandasService {
     }
   }
 
+  /** Soma dos produtos vendidos (preço unitário × quantidade); consumo = 0. */
+  private productsRevenue(
+    products: { priceSnapshot: Prisma.Decimal | null; quantityUsed: Prisma.Decimal }[],
+  ): Prisma.Decimal {
+    return products.reduce(
+      (acc, p) =>
+        p.priceSnapshot ? acc.plus(p.priceSnapshot.mul(p.quantityUsed)) : acc,
+      new Prisma.Decimal(0),
+    );
+  }
+
   /** Prévia dos valores enquanto a comanda está aberta (sinal já abatido). */
   private buildSummary(comanda: {
     discount: Prisma.Decimal;
     procedures: { priceSnapshot: Prisma.Decimal }[];
-    appointment: { depositAmount: Prisma.Decimal };
+    products: { priceSnapshot: Prisma.Decimal | null; quantityUsed: Prisma.Decimal }[];
+    appointment: { depositAmount: Prisma.Decimal } | null;
   }) {
-    const subtotal = comanda.procedures.reduce(
-      (acc, p) => acc.plus(p.priceSnapshot),
-      new Prisma.Decimal(0),
-    );
+    const subtotal = comanda.procedures
+      .reduce((acc, p) => acc.plus(p.priceSnapshot), new Prisma.Decimal(0))
+      .plus(this.productsRevenue(comanda.products));
     const total = Prisma.Decimal.max(
       subtotal.minus(comanda.discount),
       new Prisma.Decimal(0),
     );
-    const deposit = comanda.appointment.depositAmount;
+    const deposit = comanda.appointment?.depositAmount ?? new Prisma.Decimal(0);
     const amountDue = Prisma.Decimal.max(
       total.minus(deposit),
       new Prisma.Decimal(0),

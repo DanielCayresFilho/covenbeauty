@@ -17,7 +17,9 @@ import { AddComandaProcedureDto } from './dto/add-procedure.dto';
 import { AddComandaProductDto } from './dto/add-product.dto';
 import { CloseComandaDto } from './dto/close-comanda.dto';
 import { QueryComandasDto } from './dto/query-comandas.dto';
-import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { CreateSaleDto } from './dto/create-sale.dto';
+import { AddSaleProductDto } from './dto/add-sale-product.dto';
+import { AuthUser, CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { RolesGuard } from '@/auth/guards/roles.guard';
 
@@ -33,6 +35,21 @@ export class ComandasController {
   @ApiOperation({ summary: '[ADMIN] Abre a comanda de um agendamento' })
   open(@Body() dto: OpenComandaDto) {
     return this.comandas.open(dto);
+  }
+
+  @Post('sale')
+  @ApiOperation({ summary: 'Abre uma comanda de venda (balcão, sem agendamento)' })
+  createSale(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthUser) {
+    return this.comandas.createSale(dto, user);
+  }
+
+  @Post(':id/sale-product')
+  @ApiOperation({ summary: 'Vende um produto na comanda (baixa unidades)' })
+  sellProduct(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddSaleProductDto,
+  ) {
+    return this.comandas.sellProduct(id, dto);
   }
 
   @Get()

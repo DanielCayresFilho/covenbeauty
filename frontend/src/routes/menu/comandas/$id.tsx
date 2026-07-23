@@ -59,7 +59,7 @@ interface Comanda {
     sessionsPlanned: number | null;
     sessionNumber: number | null;
     professional: { id: string; fullName: string } | null;
-  };
+  } | null;
   procedures: {
     id: string;
     procedureId: string | null;
@@ -73,6 +73,7 @@ interface Comanda {
     nameSnapshot: string;
     quantityUsed: string;
     measureUnit: string;
+    priceSnapshot: string | null;
   }[];
   summary: {
     subtotal: string;
@@ -132,6 +133,7 @@ function ComandaDetail() {
 
   const c = query.data;
   const open = c.status === "OPEN";
+  const isSale = !c.appointment; // comanda de venda de balcão
 
   return (
     <div className="space-y-5">
@@ -148,8 +150,13 @@ function ComandaDetail() {
             {c.client?.fullName ?? "Cliente"}
           </h1>
           <p className="text-xs text-muted-foreground">
-            {c.appointment.professional?.fullName} ·{" "}
-            {formatInTimeZone(new Date(c.appointment.startTime), TZ, "dd/MM HH:mm")}
+            {c.appointment
+              ? `${c.appointment.professional?.fullName ?? ""} · ${formatInTimeZone(
+                  new Date(c.appointment.startTime),
+                  TZ,
+                  "dd/MM HH:mm",
+                )}`
+              : `Venda de balcão · ${formatInTimeZone(new Date(c.openedAt), TZ, "dd/MM HH:mm")}`}
           </p>
         </div>
         <span
@@ -163,21 +170,23 @@ function ComandaDetail() {
       </div>
 
       {/* Decalque da tatuagem */}
-      {(!!c.appointment.sessionsPlanned ||
-        c.appointment.sessionNumber != null ||
-        !!c.appointment.decalqueFilename ||
-        (c.procedures[0] && !c.procedures[0].procedureId)) && (
-        <section>
-          <Decalque
-            appointmentId={c.appointment.id}
-            decalqueFilename={c.appointment.decalqueFilename}
-            canEdit={open}
-            onChanged={invalidate}
-          />
-        </section>
-      )}
+      {c.appointment &&
+        (!!c.appointment.sessionsPlanned ||
+          c.appointment.sessionNumber != null ||
+          !!c.appointment.decalqueFilename ||
+          (c.procedures[0] && !c.procedures[0].procedureId)) && (
+          <section>
+            <Decalque
+              appointmentId={c.appointment.id}
+              decalqueFilename={c.appointment.decalqueFilename}
+              canEdit={open}
+              onChanged={invalidate}
+            />
+          </section>
+        )}
 
-      {/* Procedimentos */}
+      {/* Procedimentos (comanda de venda não tem) */}
+      {!isSale && (
       <section className="space-y-2">
         <SectionHeader title="Procedimentos" />
         {c.procedures.map((p) => (
@@ -197,10 +206,11 @@ function ComandaDetail() {
         ))}
         {open && <AddProcedure comandaId={id} onDone={invalidate} />}
       </section>
+      )}
 
-      {/* Produtos consumidos */}
+      {/* Produtos (venda ou consumo) */}
       <section className="space-y-2">
-        <SectionHeader title="Produtos consumidos" />
+        <SectionHeader title={isSale ? "Produtos vendidos" : "Produtos consumidos"} />
         {c.products.length === 0 && (
           <p className="text-xs text-muted-foreground">Nenhum produto lançado.</p>
         )}
@@ -209,15 +219,27 @@ function ComandaDetail() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-parchment">{p.nameSnapshot}</p>
               <p className="text-xs text-muted-foreground">
-                {Number(p.quantityUsed).toLocaleString("pt-BR")} {p.measureUnit}
+                {p.priceSnapshot
+                  ? `${Number(p.quantityUsed).toLocaleString("pt-BR")} un × ${brl(p.priceSnapshot)}`
+                  : `${Number(p.quantityUsed).toLocaleString("pt-BR")} ${p.measureUnit}`}
               </p>
             </div>
+            {p.priceSnapshot && (
+              <span className="text-sm text-parchment">
+                {brl(Number(p.priceSnapshot) * Number(p.quantityUsed))}
+              </span>
+            )}
             {open && (
               <RemoveBtn onDone={invalidate} path={`/comandas/${id}/products/${p.id}`} />
             )}
           </Card>
         ))}
-        {open && <AddProduct comandaId={id} onDone={invalidate} />}
+        {open &&
+          (isSale ? (
+            <SellProduct comandaId={id} onDone={invalidate} />
+          ) : (
+            <AddProduct comandaId={id} onDone={invalidate} />
+          ))}
       </section>
 
       {/* Resumo */}
@@ -327,6 +349,71 @@ function AddProcedure({ comandaId, onDone }: { comandaId: string; onDone: () => 
 }
 
 // ─────────────── Adicionar produto consumido ───────────────
+
+function SellProduct({ comandaId, onDone }: { comandaId: string; onDone: () => void }) {
+  const [productId, setProductId] = useState("");
+  const [qty, setQty] = useState("1");
+  const list = useQuery({
+    queryKey: ["products", "sale"],
+    queryFn: () =>
+      apiFetch<{
+        data: { id: string; name: string; price: string; unitsInStock: number; type: string }[];
+      }>("/products?type=SALE&limit=100"),
+    retry: false,
+  });
+  const product = (list.data?.data ?? []).find((p) => p.id === productId);
+  const sell = useMutation({
+    mutationFn: () =>
+      apiFetch(`/comandas/${comandaId}/sale-product`, {
+        method: "POST",
+        body: JSON.stringify({ productId, quantity: Number(qty) }),
+      }),
+    onSuccess: () => {
+      setProductId("");
+      setQty("1");
+      onDone();
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Falha ao vender produto"),
+  });
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-border p-2">
+      <Combobox
+        value={productId}
+        onChange={setProductId}
+        placeholder="Vender produto (revenda)"
+        searchPlaceholder="Buscar produto..."
+        items={(list.data?.data ?? []).map((p) => ({
+          value: p.id,
+          label: p.name,
+          hint: `${brl(p.price)} · ${p.unitsInStock} un`,
+        }))}
+      />
+      {productId && (
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            min="1"
+            step="1"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            placeholder="Qtd (unidades)"
+            className="h-10"
+          />
+          <Button
+            variant="secondary"
+            className="h-10 shrink-0"
+            disabled={!qty || Number(qty) <= 0 || sell.isPending}
+            onClick={() => sell.mutate()}
+          >
+            {product ? brl(Number(product.price) * Number(qty || 0)) : "Vender"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AddProduct({ comandaId, onDone }: { comandaId: string; onDone: () => void }) {
   const [productId, setProductId] = useState("");

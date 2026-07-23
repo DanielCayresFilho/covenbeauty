@@ -1,13 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
+import { toast } from "sonner";
+import { ShoppingBag } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 
 export const Route = createFileRoute("/menu/comandas/")({
   component: ComandasPage,
@@ -28,7 +31,7 @@ interface ComandaItem {
   appointment: {
     startTime: string;
     professional: { fullName: string } | null;
-  };
+  } | null;
 }
 interface Paginated<T> {
   data: T[];
@@ -45,6 +48,7 @@ function ComandasPage() {
 
 function Comandas() {
   const [status, setStatus] = useState<"OPEN" | "CLOSED">("OPEN");
+  const navigate = useNavigate();
 
   const query = useQuery({
     queryKey: ["comandas", status],
@@ -53,13 +57,33 @@ function Comandas() {
     retry: false,
   });
 
+  const newSale = useMutation({
+    mutationFn: () =>
+      apiFetch<{ id: string }>("/comandas/sale", {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onSuccess: (c) => navigate({ to: "/menu/comandas/$id", params: { id: c.id } }),
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível abrir a venda"),
+  });
+
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
-          Operação
-        </p>
-        <h1 className="mt-1 font-serif text-3xl text-parchment">Comandas</h1>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
+            Operação
+          </p>
+          <h1 className="mt-1 font-serif text-3xl text-parchment">Comandas</h1>
+        </div>
+        <Button
+          className="gap-2"
+          disabled={newSale.isPending}
+          onClick={() => newSale.mutate()}
+        >
+          <ShoppingBag className="h-4 w-4" /> Nova venda
+        </Button>
       </div>
 
       <div className="flex rounded-md border border-border p-0.5">
@@ -72,7 +96,8 @@ function Comandas() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Para abrir uma comanda, toque num agendamento na Agenda → "Abrir comanda".
+        Comanda de atendimento: toque num agendamento na Agenda → "Abrir comanda".
+        Venda de balcão: use "Nova venda" acima.
       </p>
 
       {query.isLoading ? (
@@ -111,9 +136,9 @@ function Comandas() {
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {formatInTimeZone(new Date(c.openedAt), TZ, "dd/MM HH:mm")}
-                    {c.appointment.professional
+                    {c.appointment?.professional
                       ? ` · ${c.appointment.professional.fullName}`
-                      : ""}
+                      : " · Venda"}
                   </p>
                 </div>
                 {(c.amountDue ?? c.total) && (

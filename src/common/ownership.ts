@@ -22,9 +22,17 @@ export function professionalWhere(user: AuthUser): { professionalId: string } {
   return { professionalId: user.id };
 }
 
-/** Escopo de comandas por profissional (via o agendamento). */
-export function comandaOwnerWhere(
-  user: AuthUser,
-): { appointment: { professionalId: string } } {
-  return { appointment: { professionalId: user.id } };
+/**
+ * Escopo de comandas por profissional: pelo agendamento (atendimento) OU pelo
+ * vendedor (comanda de venda de balcão, sem agendamento).
+ */
+export function comandaOwnerWhere(user: AuthUser): {
+  OR: [{ appointment: { professionalId: string } }, { sellerId: string }];
+} {
+  return {
+    OR: [
+      { appointment: { professionalId: user.id } },
+      { sellerId: user.id },
+    ],
+  };
 }
