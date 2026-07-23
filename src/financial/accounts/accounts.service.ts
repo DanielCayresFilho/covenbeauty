@@ -47,20 +47,16 @@ export class AccountsService {
 
   async remove(id: string, user: AuthUser) {
     await this.findOne(id, user);
-    try {
-      await this.prisma.financialAccount.delete({ where: { id } });
-      return { deleted: true, id };
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2003'
-      ) {
-        throw new ConflictException(
-          'Não é possível excluir: há lançamentos nesta conta. Inative-a.',
-        );
-      }
-      throw e;
+    const linked = await this.prisma.financialEntry.count({
+      where: { accountId: id },
+    });
+    if (linked > 0) {
+      throw new ConflictException(
+        'Não é possível excluir: há lançamentos nesta conta. Inative-a.',
+      );
     }
+    await this.prisma.financialAccount.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   /**

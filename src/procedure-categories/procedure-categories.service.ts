@@ -53,20 +53,15 @@ export class ProcedureCategoriesService {
 
   async remove(id: string) {
     await this.findOne(id);
-    try {
-      await this.prisma.procedureCategory.delete({ where: { id } });
-      return { deleted: true, id };
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2003'
-      ) {
-        throw new ConflictException(
-          'Não é possível excluir: há procedimentos vinculados a esta categoria',
-        );
-      }
-      throw e;
+    // Checagem proativa: FK RESTRICT lança código 23001 (não mapeado para P2003).
+    const linked = await this.prisma.procedure.count({ where: { categoryId: id } });
+    if (linked > 0) {
+      throw new ConflictException(
+        'Não é possível excluir: há procedimentos vinculados a esta categoria',
+      );
     }
+    await this.prisma.procedureCategory.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   private handleUniqueName(e: unknown): Error {

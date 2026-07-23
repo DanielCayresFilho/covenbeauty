@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -137,6 +138,15 @@ export class ProductsService {
 
   async remove(id: string, user: AuthUser) {
     const product = await this.findOne(id, user);
+    // ComandaProduct referencia o produto com RESTRICT (histórico de comandas).
+    const linked = await this.prisma.comandaProduct.count({
+      where: { productId: id },
+    });
+    if (linked > 0) {
+      throw new ConflictException(
+        'Não é possível excluir: este produto já foi usado/vendido em comandas. Inative-o.',
+      );
+    }
     await this.prisma.product.delete({ where: { id } });
     if (product.imageFilename) await removeImage('products', product.imageFilename);
     return { deleted: true, id };
