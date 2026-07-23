@@ -273,12 +273,13 @@ export class AppointmentsService {
     const durationSource =
       snapshots ??
       current.procedures.map((p) => ({ durationSnapshot: p.durationSnapshot }));
-    const end =
-      current.type === AppointmentType.BLOCK
+    // Fim explícito (arraste/redimensionamento/tatuagem) sempre vence; senão,
+    // bloqueio mantém a duração atual e atendimento recalcula pelas durações.
+    const end = dto.endTime
+      ? new Date(dto.endTime)
+      : current.type === AppointmentType.BLOCK
         ? current.endTime
-        : dto.endTime
-          ? new Date(dto.endTime) // fim manual (ex.: tatuagem)
-          : this.addMinutes(start, this.totalDurationOf(durationSource));
+        : this.addMinutes(start, this.totalDurationOf(durationSource));
 
     if (dto.startTime || dto.procedureIds || dto.professionalId || dto.endTime) {
       if (end <= start) {

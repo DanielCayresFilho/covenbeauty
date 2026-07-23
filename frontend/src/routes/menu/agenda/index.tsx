@@ -495,6 +495,7 @@ function CalendarView({
   professionalId: string;
 }) {
   const calRef = useRef<FullCalendar>(null);
+  const qc = useQueryClient();
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [title, setTitle] = useState("");
   const [view, setView] = useState<"timeGridDay" | "timeGridWeek">("timeGridWeek");
@@ -507,6 +508,21 @@ function CalendarView({
       ),
     enabled: !!range,
     retry: false,
+  });
+
+  // Arrastar/redimensionar no calendário reagenda (PATCH startTime/endTime).
+  const move = useMutation({
+    mutationFn: (vars: { id: string; startTime: string; endTime: string }) =>
+      apiFetch(`/appointments/${vars.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ startTime: vars.startTime, endTime: vars.endTime }),
+      }),
+    onSuccess: () => {
+      toast.success("Agendamento movido ✦");
+      void qc.invalidateQueries({ queryKey: ["appointments"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível mover"),
   });
 
   const blocksQuery = useQuery({
@@ -601,11 +617,45 @@ function CalendarView({
           /* Dois profissionais no mesmo horário: dividem o espaço lado a lado
              em vez de um cobrir o outro. */
           slotEventOverlap={false}
+          /* Arrastar para reagendar e redimensionar para mudar a duração. */
+          editable
+          eventStartEditable
+          eventDurationEditable
           events={events}
           eventContent={renderEventContent}
           eventClick={(arg: EventClickArg) => {
             const a = arg.event.extendedProps.appt as Appt | undefined;
             if (a) onSelect(a);
+          }}
+          eventDrop={(arg) => {
+            const a = arg.event.extendedProps.appt as Appt | undefined;
+            if (!a || !arg.event.start || !arg.event.end) {
+              arg.revert();
+              return;
+            }
+            move.mutate(
+              {
+                id: a.id,
+                startTime: arg.event.start.toISOString(),
+                endTime: arg.event.end.toISOString(),
+              },
+              { onError: () => arg.revert() },
+            );
+          }}
+          eventResize={(arg) => {
+            const a = arg.event.extendedProps.appt as Appt | undefined;
+            if (!a || !arg.event.start || !arg.event.end) {
+              arg.revert();
+              return;
+            }
+            move.mutate(
+              {
+                id: a.id,
+                startTime: arg.event.start.toISOString(),
+                endTime: arg.event.end.toISOString(),
+              },
+              { onError: () => arg.revert() },
+            );
           }}
           datesSet={(arg: DatesSetArg) => {
             setRange({ from: arg.startStr, to: arg.endStr });
