@@ -1,11 +1,19 @@
 import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MONTHS, money } from "./constants";
 
@@ -18,6 +26,7 @@ interface MonthRow {
   custosVariaveis: string;
   despesasFixas: string;
   proLabore: string;
+  proLaboreInput: string | null;
   investimentos: string;
   lucroLiquido: string;
   margemLucroLiquido: number | null;
@@ -36,61 +45,149 @@ interface CashFlow {
   year: number;
   openingBalance: string;
   months: MonthRow[];
-  total: Omit<MonthRow, "month" | "saldoInicial">;
+  total: Omit<MonthRow, "month" | "proLaboreInput">;
   breakdown: Record<string, AccountBreak[]>;
 }
 
-// Categorias que expandem para mostrar as contas (procedimentos, despesas...).
-const EXPANDABLE = new Set([
-  "entradas",
-  "custosVariaveis",
-  "despesasFixas",
-  "proLabore",
-  "investimentos",
-]);
+type RowKey = Exclude<keyof MonthRow, "month" | "saldoInicialManual" | "proLaboreInput">;
 
-type RowKey = keyof Omit<MonthRow, "month" | "margemLucroLiquido">;
 interface RowDef {
-  key: RowKey | "margemLucroLiquido";
+  key: RowKey;
   label: string;
-  indent?: boolean;
-  emphasis?: "profit" | "balance";
+  /** Faixa colorida da linha (classe utilitária cb-band-*). */
+  band?: string;
+  /** Cor do valor. */
+  tone?: string;
+  /** Nível de recuo: 0 = seção, 1 = subseção. */
+  level?: 0 | 1;
+  /** A linha abre para mostrar as contas que a compõem. */
+  expandable?: boolean;
+  /** A célula do mês é digitável. */
+  editable?: "saldoInicial" | "proLabore";
+  /** Só aparece quando esta seção-pai está aberta. */
+  parent?: RowKey;
   percent?: boolean;
+  strong?: boolean;
 }
 
+/**
+ * A planilha, na mesma ordem e hierarquia da original: as saídas agrupam
+ * custos variáveis, despesas fixas e investimentos; o pró-labore fica FORA
+ * das saídas e só desce no saldo final.
+ */
 const ROWS: RowDef[] = [
-  { key: "saldoInicial", label: "Saldo Inicial", emphasis: "balance" },
-  { key: "entradas", label: "Entradas de Dinheiro" },
-  { key: "saidas", label: "Saídas de Dinheiro" },
-  { key: "custosVariaveis", label: "Custos Variáveis", indent: true },
-  { key: "despesasFixas", label: "Despesas Fixas", indent: true },
-  { key: "proLabore", label: "Pró-labore", indent: true },
-  { key: "investimentos", label: "Investimentos", indent: true },
-  { key: "lucroLiquido", label: "Lucro Líquido", emphasis: "profit" },
-  { key: "margemLucroLiquido", label: "Margem de Lucro %", percent: true },
+  {
+    key: "saldoInicial",
+    label: "Saldo Inicial",
+    band: "cb-band-balance",
+    editable: "saldoInicial",
+    strong: true,
+  },
+  {
+    key: "entradas",
+    label: "ENTRADAS DE DINHEIRO",
+    band: "cb-band-income",
+    tone: "text-emerald-600 dark:text-emerald-400",
+    expandable: true,
+    strong: true,
+  },
+  {
+    key: "saidas",
+    label: "SAÍDAS DE DINHEIRO",
+    band: "cb-band-outflow",
+    tone: "text-rose-600 dark:text-rose-400",
+    expandable: true,
+    strong: true,
+  },
+  {
+    key: "custosVariaveis",
+    label: "Custos Variáveis",
+    band: "cb-band-variable",
+    tone: "text-orange-600 dark:text-orange-400",
+    level: 1,
+    expandable: true,
+    parent: "saidas",
+  },
+  {
+    key: "despesasFixas",
+    label: "Despesas Fixas",
+    band: "cb-band-fixed",
+    tone: "text-sky-600 dark:text-sky-400",
+    level: 1,
+    expandable: true,
+    parent: "saidas",
+  },
+  {
+    key: "investimentos",
+    label: "Investimentos",
+    band: "cb-band-investment",
+    tone: "text-violet-600 dark:text-violet-400",
+    level: 1,
+    expandable: true,
+    parent: "saidas",
+  },
+  {
+    key: "proLabore",
+    label: "Pró-labore",
+    band: "cb-band-prolabore",
+    tone: "text-amber-600 dark:text-amber-400",
+    editable: "proLabore",
+    expandable: true,
+    strong: true,
+  },
+  {
+    key: "lucroLiquido",
+    label: "Lucro Líquido",
+    band: "cb-band-profit",
+    strong: true,
+  },
+  {
+    key: "margemLucroLiquido",
+    label: "Margem de Lucro (%)",
+    band: "cb-band-margin",
+    percent: true,
+  },
   { key: "distribuicaoLucros", label: "Distribuição de Lucros" },
   { key: "aplicacao", label: "Aplicação" },
   { key: "resgate", label: "Resgate" },
-  { key: "saldoFinal", label: "Saldo Final", emphasis: "balance" },
+  {
+    key: "saldoFinal",
+    label: "Saldo Final",
+    band: "cb-band-balance",
+    strong: true,
+  },
 ];
 
-const fmtCell = (row: RowDef, value: string | number | null) => {
-  if (row.percent) {
-    return value == null
-      ? "—"
-      : `${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`;
-  }
-  return money(value as string);
+/** Chave do detalhamento por conta devolvido pelo backend. */
+const BREAKDOWN_KEY: Partial<Record<RowKey, string>> = {
+  entradas: "entradas",
+  custosVariaveis: "custosVariaveis",
+  despesasFixas: "despesasFixas",
+  investimentos: "investimentos",
+  proLabore: "proLabore",
 };
 
+const brl = (v: string | number | null) =>
+  v == null ? "—" : `R$ ${money(v)}`;
+
+/** Verde quando positivo, vermelho quando negativo. */
+const signTone = (v: string | number | null) =>
+  Number(v ?? 0) < 0
+    ? "text-rose-600 dark:text-rose-400"
+    : "text-emerald-600 dark:text-emerald-400";
+
 export function CashFlowTab() {
-  const now = new Date();
   const qc = useQueryClient();
-  const [year, setYear] = useState(now.getUTCFullYear());
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  // Seções abertas. As saídas já vêm abertas mostrando os três grupos; o
+  // detalhamento por conta começa fechado, como na planilha original.
+  const [open, setOpen] = useState<Set<string>>(new Set(["saidas"]));
+
+  const years = Array.from({ length: 7 }, (_, i) => currentYear + 1 - i);
 
   const toggle = (key: string) =>
-    setExpanded((prev) => {
+    setOpen((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -106,41 +203,82 @@ export function CashFlowTab() {
     retry: false,
   });
 
-  // Saldo inicial manual por mês (salva e recalcula o fluxo).
-  const saveOpening = useMutation({
-    mutationFn: (vars: { month: number; amount: number | null }) =>
+  // Saldo inicial e pró-labore digitados na planilha.
+  const saveCell = useMutation({
+    mutationFn: (vars: {
+      month: number;
+      field: "amount" | "proLabore";
+      value: number | null;
+    }) =>
       apiFetch("/financial/reports/cash-flow/opening", {
         method: "PUT",
-        body: JSON.stringify({ year, ...vars }),
+        body: JSON.stringify({
+          year,
+          month: vars.month,
+          [vars.field]: vars.value,
+        }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cash-flow", year] }),
+    onSuccess: () => {
+      toast.success("Planilha atualizada ✦");
+      void qc.invalidateQueries({ queryKey: ["cash-flow", year] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar"),
   });
+
+  const data = query.data;
+
+  /** A linha aparece? (subseções somem quando a seção-pai está fechada) */
+  const isVisible = (row: RowDef) => !row.parent || open.has(row.parent);
+
+  const cellValue = (row: RowDef, mo: MonthRow) =>
+    row.percent
+      ? mo.margemLucroLiquido == null
+        ? "—"
+        : `${mo.margemLucroLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`
+      : brl(mo[row.key] as string);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" onClick={() => setYear((y) => y - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-16 text-center font-serif text-xl text-parchment">
-            {year}
-          </span>
-          <Button variant="outline" size="icon" onClick={() => setYear((y) => y + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger className="h-10 w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {years.map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          size="icon"
+          title="Atualizar"
+          disabled={query.isFetching}
+          onClick={() => {
+            void query.refetch();
+            toast.info("Dados atualizados");
+          }}
+        >
+          <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />
+        </Button>
       </div>
 
-      <p className="text-[0.7rem] text-muted-foreground">
-        Valores em R$. O <strong>Saldo Inicial</strong> de cada mês é editável
-        (clique e digite); em branco, ele puxa o saldo final do mês anterior.
-        Clique nas linhas com seta (▸) para ver o detalhamento por conta.
+      <p className="text-[0.7rem] leading-relaxed text-muted-foreground">
+        <strong>Saldo Inicial</strong> e <strong>Pró-labore</strong> são
+        digitáveis: clique na célula e digite. Saldo inicial em branco puxa o
+        saldo final do mês anterior. Clique nas linhas com seta (▸) para abrir o
+        detalhamento por conta. O pró-labore não entra nas saídas nem no lucro —
+        ele só desce no saldo final.
       </p>
 
       {query.isLoading ? (
         <Skeleton className="h-96 rounded-lg" />
-      ) : query.isError ? (
+      ) : query.isError || !data ? (
         <Card className="border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Não foi possível carregar. Verifique se o servidor está no ar.
         </Card>
@@ -149,49 +287,52 @@ export function CashFlowTab() {
           <table className="w-full border-collapse text-right text-[0.82rem]">
             <thead>
               <tr className="bg-secondary">
-                <th className="sticky left-0 z-10 min-w-44 bg-secondary px-3 py-2.5 text-left font-semibold text-foreground">
-                  Linha
+                <th className="sticky left-0 z-10 min-w-52 bg-secondary px-3 py-2.5 text-left font-semibold text-foreground">
+                  Descrição
                 </th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-[5.5rem] px-3 py-2.5 font-semibold text-muted-foreground">
+                  <th
+                    key={m}
+                    className="min-w-[6rem] px-3 py-2.5 font-semibold uppercase text-muted-foreground"
+                  >
                     {m}
                   </th>
                 ))}
-                <th className="min-w-24 bg-primary/15 px-3 py-2.5 font-semibold text-primary">
+                <th className="cb-col-total min-w-28 px-3 py-2.5 font-semibold uppercase text-primary">
                   Total
                 </th>
               </tr>
             </thead>
             <tbody>
-              {ROWS.map((row) => {
-                // Fundos SÓLIDOS (a 1ª coluna é fixa; transparência vazaria ao rolar).
-                const stickyBg = row.emphasis ? "bg-secondary" : "bg-card";
-                const rowBg = row.emphasis ? "bg-secondary" : "bg-background";
-                const valCls =
-                  row.emphasis === "profit"
-                    ? "font-semibold text-primary"
-                    : row.emphasis === "balance"
-                      ? "font-semibold text-foreground"
-                      : "text-foreground/90";
-                const accounts = query.data!.breakdown[row.key] ?? [];
-                const canExpand = EXPANDABLE.has(row.key) && accounts.length > 0;
-                const isOpen = expanded.has(row.key);
+              {ROWS.filter(isVisible).map((row) => {
+                const accounts = data.breakdown[BREAKDOWN_KEY[row.key] ?? ""] ?? [];
+                const canExpand = !!row.expandable && accounts.length > 0;
+                const isOpen = open.has(row.key);
+                // Saídas abrem/fecham as três subseções, mesmo sem contas.
+                const toggles = canExpand || row.key === "saidas";
+
+                const tone =
+                  row.key === "lucroLiquido" || row.key === "saldoFinal"
+                    ? undefined // definido por mês, conforme o sinal
+                    : (row.tone ?? "text-foreground/90");
+
                 return (
                   <Fragment key={row.key}>
-                    <tr className={cn("border-t border-border", rowBg)}>
+                    <tr className={cn("border-t border-border", row.band)}>
                       <td
                         className={cn(
                           "sticky left-0 z-10 px-3 py-2.5 text-left",
-                          stickyBg,
-                          row.indent ? "pl-6 text-muted-foreground" : "text-foreground",
-                          row.emphasis && "font-semibold",
+                          row.band ?? "bg-background",
+                          row.level === 1 ? "pl-7" : "",
+                          row.strong && "font-semibold",
+                          row.tone ?? "text-foreground",
                         )}
                       >
-                        {canExpand ? (
+                        {toggles ? (
                           <button
                             type="button"
                             onClick={() => toggle(row.key)}
-                            className="flex items-center gap-1.5 text-left hover:text-primary"
+                            className="flex items-center gap-1.5 text-left hover:opacity-80"
                           >
                             {isOpen ? (
                               <ChevronDown className="h-3.5 w-3.5 shrink-0" />
@@ -199,58 +340,112 @@ export function CashFlowTab() {
                               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                             )}
                             <span>{row.label}</span>
+                            {accounts.length > 0 && (
+                              <span className="text-[0.65rem] font-normal opacity-70">
+                                ({accounts.length}{" "}
+                                {accounts.length === 1 ? "conta" : "contas"})
+                              </span>
+                            )}
                           </button>
                         ) : (
                           row.label
                         )}
                       </td>
-                      {query.data!.months.map((mo) =>
-                        row.key === "saldoInicial" ? (
+
+                      {data.months.map((mo) =>
+                        row.editable ? (
                           <td key={mo.month} className="px-1.5 py-1.5">
-                            <OpeningCell
-                              value={mo.saldoInicial}
-                              manual={!!mo.saldoInicialManual}
-                              onSave={(amount) =>
-                                saveOpening.mutate({ month: mo.month, amount })
+                            <SheetCell
+                              value={
+                                row.editable === "saldoInicial"
+                                  ? mo.saldoInicial
+                                  : (mo.proLaboreInput ?? "")
+                              }
+                              highlighted={
+                                row.editable === "saldoInicial"
+                                  ? !!mo.saldoInicialManual
+                                  : mo.proLaboreInput != null
+                              }
+                              title={
+                                row.editable === "saldoInicial"
+                                  ? "Saldo inicial — em branco puxa o mês anterior"
+                                  : "Pró-labore do mês"
+                              }
+                              onSave={(value) =>
+                                saveCell.mutate({
+                                  month: mo.month,
+                                  field:
+                                    row.editable === "saldoInicial"
+                                      ? "amount"
+                                      : "proLabore",
+                                  value,
+                                })
                               }
                             />
                           </td>
                         ) : (
-                          <td key={mo.month} className={cn("px-3 py-2.5", valCls)}>
-                            {fmtCell(row, mo[row.key as keyof MonthRow] as string | number | null)}
+                          <td
+                            key={mo.month}
+                            className={cn(
+                              "px-3 py-2.5",
+                              row.strong && "font-semibold",
+                              tone ??
+                                signTone(
+                                  mo[row.key] as string,
+                                ),
+                            )}
+                          >
+                            {cellValue(row, mo)}
                           </td>
                         ),
                       )}
-                      <td className={cn("px-3 py-2.5 font-medium", valCls)}>
-                        {row.key === "saldoInicial"
-                          ? "—"
-                          : fmtCell(
-                              row,
-                              query.data!.total[
+
+                      <td
+                        className={cn(
+                          "cb-col-total px-3 py-2.5 font-semibold",
+                          row.percent
+                            ? "text-foreground"
+                            : (tone ??
+                              signTone(
+                                data.total[row.key as keyof CashFlow["total"]] as string,
+                              )),
+                        )}
+                      >
+                        {row.percent
+                          ? data.total.margemLucroLiquido == null
+                            ? "—"
+                            : `${data.total.margemLucroLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`
+                          : brl(
+                              data.total[
                                 row.key as keyof CashFlow["total"]
-                              ] as string | number | null,
+                              ] as string,
                             )}
                       </td>
                     </tr>
 
-                    {/* Sub-linhas: contas/procedimentos que somaram nesta categoria. */}
+                    {/* Contas que compõem a seção. */}
                     {canExpand &&
                       isOpen &&
                       accounts.map((acc) => (
                         <tr
                           key={row.key + acc.accountId}
-                          className="border-t border-border/40 bg-background/60"
+                          className="cb-band-detail border-t border-border/40"
                         >
-                          <td className="sticky left-0 z-10 bg-card/95 py-2 pl-10 pr-3 text-left text-xs text-muted-foreground">
+                          <td
+                            className={cn(
+                              "cb-band-detail sticky left-0 z-10 py-2 pr-3 text-left text-xs text-muted-foreground",
+                              row.level === 1 ? "pl-12" : "pl-9",
+                            )}
+                          >
                             {acc.name}
                           </td>
                           {acc.months.map((v, i) => (
                             <td key={i} className="px-3 py-2 text-xs text-foreground/75">
-                              {money(v)}
+                              {brl(v)}
                             </td>
                           ))}
-                          <td className="px-3 py-2 text-xs font-medium text-foreground/90">
-                            {money(acc.total)}
+                          <td className="cb-col-total px-3 py-2 text-xs font-medium text-foreground/90">
+                            {brl(acc.total)}
                           </td>
                         </tr>
                       ))}
@@ -265,28 +460,40 @@ export function CashFlowTab() {
   );
 }
 
-/** Célula editável do Saldo Inicial de um mês (salva ao sair do campo). */
-function OpeningCell({
+/**
+ * Célula digitável da planilha (saldo inicial / pró-labore). Salva ao sair do
+ * campo ou no Enter; apagar tudo devolve a célula ao automático.
+ */
+function SheetCell({
   value,
-  manual,
+  highlighted,
+  title,
   onSave,
 }: {
-  value: string; // ex.: "615.00"
-  manual: boolean;
-  onSave: (amount: number | null) => void;
+  value: string; // ex.: "615.00" ou "" quando vazio
+  highlighted: boolean;
+  title: string;
+  onSave: (value: number | null) => void;
 }) {
-  const [v, setV] = useState(value);
-  useEffect(() => setV(value), [value]);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
 
   const commit = () => {
-    const trimmed = v.trim();
-    const amount = trimmed === "" ? null : Number(trimmed);
-    if (amount !== null && Number.isNaN(amount)) {
-      setV(value);
+    const trimmed = draft.trim();
+    if (trimmed === "") {
+      // Só avisa o servidor se já havia um valor gravado.
+      if (highlighted) onSave(null);
+      else setDraft(value);
       return;
     }
-    // Só salva se mudou de fato (compara com o valor formatado atual).
-    if (Number(trimmed || 0) !== Number(value)) onSave(amount);
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed)) {
+      setDraft(value);
+      return;
+    }
+    // Só grava se mudou — senão focar numa célula automática (carryover) já a
+    // transformaria em manual.
+    if (parsed !== Number(value || 0)) onSave(parsed);
   };
 
   return (
@@ -294,17 +501,19 @@ function OpeningCell({
       type="number"
       step="0.01"
       inputMode="decimal"
-      value={v}
-      onChange={(e) => setV(e.target.value)}
+      value={draft}
+      placeholder="—"
+      title={title}
+      onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setDraft(value);
       }}
-      title={manual ? "Saldo inicial manual (editado)" : "Automático — clique para editar"}
       className={cn(
-        "w-full min-w-[4.5rem] rounded border border-transparent bg-transparent px-1.5 py-1 text-right text-[0.82rem] font-semibold text-foreground outline-none",
-        "hover:border-border focus:border-primary focus:bg-secondary",
-        manual && "text-primary",
+        "w-full min-w-[5rem] rounded border border-transparent bg-transparent px-1.5 py-1 text-right text-[0.82rem] font-semibold outline-none",
+        "hover:border-border focus:border-primary focus:bg-background",
+        highlighted ? "text-primary" : "text-foreground",
       )}
     />
   );

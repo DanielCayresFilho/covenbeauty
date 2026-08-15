@@ -20,10 +20,21 @@ export class SetOpeningDto {
 
   @ApiPropertyOptional({
     example: 615.0,
-    description: 'Valor do saldo inicial. Omita/null para voltar ao automático (carryover).',
+    description:
+      'Saldo inicial digitado. Omita para não mexer; null para voltar ao automático (carryover).',
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   amount?: number | null;
+
+  @ApiPropertyOptional({
+    example: 2000.0,
+    description:
+      'Pró-labore do mês. Omita para não mexer; null para voltar a zero.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  proLabore?: number | null;
 }

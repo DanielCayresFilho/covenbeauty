@@ -11,6 +11,13 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -20,9 +27,18 @@ import {
 import { apiFetch, ApiError } from "@/lib/api";
 import { brl } from "./constants";
 
+type GoalPeriod = "WEEKLY" | "MONTHLY" | "CUSTOM";
+
+const PERIOD_LABEL: Record<GoalPeriod, string> = {
+  WEEKLY: "Semanal",
+  MONTHLY: "Mensal",
+  CUSTOM: "Período",
+};
+
 interface Goal {
   id: string;
   name: string | null;
+  period: GoalPeriod;
   startDate: string;
   endDate: string;
   targetAmount: string;
@@ -86,6 +102,9 @@ export function GoalsTab() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm text-parchment">
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wide text-muted-foreground">
+                      {PERIOD_LABEL[g.period]}
+                    </span>
                     {g.name || "Meta"}
                     {g.progress.reached && (
                       <span className="flex items-center gap-1 text-emerald-400">
@@ -129,14 +148,19 @@ export function GoalsTab() {
 function GoalForm({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
+  const [period, setPeriod] = useState<GoalPeriod>("MONTHLY");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [target, setTarget] = useState("");
+
+  // Semanal e mensal usam o período corrente e se renovam sozinhas.
+  const needsDates = period === "CUSTOM";
 
   useEffect(() => {
     if (!open) return;
     setName("");
     setTarget("");
+    setPeriod("MONTHLY");
     const now = new Date();
     const first = new Date(now.getFullYear(), now.getMonth(), 1);
     const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -150,8 +174,8 @@ function GoalForm({ open, onClose }: { open: boolean; onClose: () => void }) {
         method: "POST",
         body: JSON.stringify({
           name: name || undefined,
-          startDate,
-          endDate,
+          period,
+          ...(needsDates ? { startDate, endDate } : {}),
           targetAmount: Number(target),
         }),
       }),
@@ -177,16 +201,32 @@ function GoalForm({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Label>Nome (opcional)</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="h-11" placeholder="ex.: Meta de julho" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Início</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-11" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Fim</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11" />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Período</Label>
+            <Select value={period} onValueChange={(v) => setPeriod(v as GoalPeriod)}>
+              <SelectTrigger className="h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="WEEKLY">Semanal (renova toda semana)</SelectItem>
+                <SelectItem value="MONTHLY">Mensal (renova todo mês)</SelectItem>
+                <SelectItem value="CUSTOM">Datas específicas</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {needsDates && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Início</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fim</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11" />
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Valor-alvo de entradas (R$)</Label>
             <Input type="number" step="0.01" min="0" value={target} onChange={(e) => setTarget(e.target.value)} className="h-11" />
@@ -194,7 +234,8 @@ function GoalForm({ open, onClose }: { open: boolean; onClose: () => void }) {
           <SheetFooter className="px-0">
             <Button
               onClick={() => {
-                if (!startDate || !endDate) return toast.error("Informe o período");
+                if (needsDates && (!startDate || !endDate))
+                  return toast.error("Informe o período");
                 if (!target || Number(target) <= 0) return toast.error("Valor-alvo inválido");
                 save.mutate();
               }}

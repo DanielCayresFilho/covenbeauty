@@ -39,6 +39,11 @@ export class CreateEntryDto {
   @IsEnum(CashFlowCategory)
   category?: CashFlowCategory;
 
+  @ApiPropertyOptional({ description: 'Cliente a quem o lançamento se refere' })
+  @IsOptional()
+  @IsUUID('4', { message: 'Cliente inválido' })
+  clientId?: string;
+
   @ApiPropertyOptional({ example: 'Pix - Gleice', description: 'Descrição (opcional)' })
   @IsOptional()
   @IsString()

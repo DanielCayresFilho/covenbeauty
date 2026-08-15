@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CashFlowTab } from "@/components/financeiro/cash-flow-tab";
 import { EntriesTab } from "@/components/financeiro/entries-tab";
 import { AccountsTab } from "@/components/financeiro/accounts-tab";
+import { FixedExpensesTab } from "@/components/financeiro/fixed-expenses-tab";
 import { GoalsTab } from "@/components/financeiro/goals-tab";
 
 export const Route = createFileRoute("/menu/financeiro/")({
@@ -23,9 +24,10 @@ function FinanceiroPage() {
         </div>
 
         <Tabs defaultValue="cashflow">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="cashflow">Fluxo</TabsTrigger>
             <TabsTrigger value="entries">Lançamentos</TabsTrigger>
+            <TabsTrigger value="fixed">Despesas fixas</TabsTrigger>
             <TabsTrigger value="accounts">Contas</TabsTrigger>
             <TabsTrigger value="goals">Metas</TabsTrigger>
           </TabsList>
@@ -35,6 +37,9 @@ function FinanceiroPage() {
           </TabsContent>
           <TabsContent value="entries" className="mt-4 cb-fade-in">
             <EntriesTab />
+          </TabsContent>
+          <TabsContent value="fixed" className="mt-4 cb-fade-in">
+            <FixedExpensesTab />
           </TabsContent>
           <TabsContent value="accounts" className="mt-4 cb-fade-in">
             <AccountsTab />

@@ -22,6 +22,7 @@ import { CloseComandaDto } from './dto/close-comanda.dto';
 import { QueryComandasDto } from './dto/query-comandas.dto';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { AddSaleProductDto } from './dto/add-sale-product.dto';
+import { ComandaFinancialService } from '@/financial/sync/comanda-financial.service';
 
 const COMANDA_INCLUDE = {
   client: { select: { id: true, fullName: true, phone: true } },
@@ -43,7 +44,10 @@ const COMANDA_INCLUDE = {
 
 @Injectable()
 export class ComandasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly comandaFinancial: ComandaFinancialService,
+  ) {}
 
   // ─────────────────────────── Abertura ───────────────────────────
 
@@ -321,10 +325,14 @@ export class ComandasService {
     if (comanda.status === ComandaStatus.OPEN) {
       throw new ConflictException('Comanda já está aberta');
     }
-    const updated = await this.prisma.comanda.update({
-      where: { id: comandaId },
-      data: { status: ComandaStatus.OPEN, closedAt: null },
-      include: COMANDA_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Reabrir tira a comanda do faturamento: os lançamentos saem do fluxo.
+      await this.comandaFinancial.clear(tx, comandaId);
+      return tx.comanda.update({
+        where: { id: comandaId },
+        data: { status: ComandaStatus.OPEN, closedAt: null },
+        include: COMANDA_INCLUDE,
+      });
     });
     return { ...updated, summary: this.buildSummary(updated) };
   }
@@ -424,6 +432,9 @@ export class ComandasService {
             },
           });
         }
+
+        // Espelha a comanda no fluxo de caixa (uma entrada por procedimento).
+        await this.comandaFinancial.syncClosed(tx, comandaId);
 
         return { closed: closedComanda, returnAppointment: created };
       },

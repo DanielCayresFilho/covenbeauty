@@ -120,6 +120,45 @@
 @utility bg-blood { background-color: var(--blood); }
 @utility bg-blood-deep { background-color: var(--blood-deep); }
 
+/* ── Faixas do fluxo de caixa ──
+   Cada seção da planilha tem sua cor, como na planilha original. Os fundos são
+   OPACOS de propósito: a primeira coluna é `sticky` e um fundo translúcido
+   deixaria o conteúdo vazar por baixo ao rolar na horizontal. */
+@utility cb-band-income {
+  background-color: color-mix(in oklab, var(--color-emerald-500) 13%, var(--background));
+}
+@utility cb-band-outflow {
+  background-color: color-mix(in oklab, var(--color-rose-500) 13%, var(--background));
+}
+@utility cb-band-variable {
+  background-color: color-mix(in oklab, var(--color-orange-500) 11%, var(--background));
+}
+@utility cb-band-fixed {
+  background-color: color-mix(in oklab, var(--color-sky-500) 11%, var(--background));
+}
+@utility cb-band-investment {
+  background-color: color-mix(in oklab, var(--color-violet-500) 11%, var(--background));
+}
+@utility cb-band-prolabore {
+  background-color: color-mix(in oklab, var(--color-amber-500) 13%, var(--background));
+}
+@utility cb-band-profit {
+  background-color: color-mix(in oklab, var(--color-indigo-500) 12%, var(--background));
+}
+@utility cb-band-margin {
+  background-color: color-mix(in oklab, var(--color-cyan-500) 11%, var(--background));
+}
+@utility cb-band-balance {
+  background-color: color-mix(in oklab, var(--secondary) 85%, var(--background));
+}
+/* Linhas de detalhe (contas dentro de uma seção) e coluna de total. */
+@utility cb-band-detail {
+  background-color: var(--background);
+}
+@utility cb-col-total {
+  background-color: color-mix(in oklab, var(--primary) 10%, var(--background));
+}
+
 @utility grain {
   position: relative;
   &::after {

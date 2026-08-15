@@ -47,7 +47,7 @@ export class EntriesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza um lançamento (data/valor/descrição)' })
+  @ApiOperation({ summary: 'Atualiza um lançamento (data/valor/conta/cliente/descrição)' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEntryDto,

@@ -22,6 +22,11 @@ export class QueryEntriesDto {
   @IsUUID('4')
   accountId?: string;
 
+  @ApiPropertyOptional({ description: 'Filtra por cliente' })
+  @IsOptional()
+  @IsUUID('4')
+  clientId?: string;
+
   @ApiPropertyOptional({ description: 'De (YYYY-MM-DD)' })
   @IsOptional()
   @IsDateString()

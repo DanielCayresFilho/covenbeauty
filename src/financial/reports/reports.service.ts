@@ -77,10 +77,9 @@ export class ReportsService {
     const fixedExpense = byCat(CashFlowCategory.FIXED_EXPENSE);
     const proLabore = byCat(CashFlowCategory.PRO_LABORE);
     const investment = byCat(CashFlowCategory.INVESTMENT);
-    const expenses = variableCost
-      .plus(fixedExpense)
-      .plus(proLabore)
-      .plus(investment);
+    // Pró-labore fica FORA das saídas e do lucro — é retirada do sócio, não
+    // despesa da operação. Só desce no saldo final (ver `cashFlow`).
+    const expenses = variableCost.plus(fixedExpense).plus(investment);
     const netProfit = income.minus(expenses);
 
     return {
@@ -116,12 +115,20 @@ export class ReportsService {
       }),
       this.prisma.cashFlowOpening.findMany({
         where: { year, ...ownerWhere(user) },
-        select: { month: true, amount: true },
+        select: { month: true, amount: true, proLabore: true },
       }),
     ]);
 
-    // Saldos iniciais manuais por mês (override); ausência = carryover.
-    const openingByMonth = new Map(openings.map((o) => [o.month, o.amount]));
+    // Valores digitados na planilha. Saldo inicial ausente = carryover;
+    // pró-labore ausente = zero.
+    const openingByMonth = new Map(
+      openings.filter((o) => o.amount !== null).map((o) => [o.month, o.amount!]),
+    );
+    const proLaboreByMonth = new Map(
+      openings
+        .filter((o) => o.proLabore !== null)
+        .map((o) => [o.month, o.proLabore!]),
+    );
 
     // Detalhamento por conta (para expandir cada categoria: procedimentos que
     // sincronizaram, despesas etc.), com 12 meses + total por conta.
@@ -183,32 +190,41 @@ export class ReportsService {
     };
 
     let prevFinal = new Prisma.Decimal(openingBalance);
+    let totalSaldoInicial = D0();
     const monthsOut = months.map((b, i) => {
       const monthNum = i + 1;
-      const saidas = b.variableCost
-        .plus(b.fixedExpense)
-        .plus(b.proLabore)
-        .plus(b.investment);
+
+      // Pró-labore: o valor digitado na planilha (caminho principal, como no
+      // sistema antigo) somado a eventuais lançamentos na categoria.
+      const proLaboreInput = proLaboreByMonth.get(monthNum) ?? null;
+      const proLabore = (proLaboreInput ?? D0()).plus(b.proLabore);
+
+      // Saídas NÃO incluem o pró-labore: ele é retirada do sócio, não despesa
+      // da operação, e só desce no saldo final.
+      const saidas = b.variableCost.plus(b.fixedExpense).plus(b.investment);
       const lucro = b.income.minus(saidas);
       const margem = b.income.greaterThan(0)
         ? lucro.div(b.income).mul(100).toDecimalPlaces(2).toNumber()
         : null;
-      // Saldo inicial: override manual do mês, senão carryover (saldo final anterior).
+
+      // Saldo inicial: valor digitado no mês, senão carryover (final anterior).
       const override = openingByMonth.get(monthNum);
       const si =
         override ?? (i === 0 ? new Prisma.Decimal(openingBalance) : prevFinal);
       const saldoFinal = si
         .plus(lucro)
+        .minus(proLabore)
         .minus(b.distribution)
         .minus(b.application)
         .plus(b.redemption);
       prevFinal = saldoFinal;
 
+      totalSaldoInicial = totalSaldoInicial.plus(si);
       totals.entradas = totals.entradas.plus(b.income);
       totals.saidas = totals.saidas.plus(saidas);
       totals.custosVariaveis = totals.custosVariaveis.plus(b.variableCost);
       totals.despesasFixas = totals.despesasFixas.plus(b.fixedExpense);
-      totals.proLabore = totals.proLabore.plus(b.proLabore);
+      totals.proLabore = totals.proLabore.plus(proLabore);
       totals.investimentos = totals.investimentos.plus(b.investment);
       totals.lucroLiquido = totals.lucroLiquido.plus(lucro);
       totals.distribuicao = totals.distribuicao.plus(b.distribution);
@@ -223,7 +239,10 @@ export class ReportsService {
         saidas: money(saidas),
         custosVariaveis: money(b.variableCost),
         despesasFixas: money(b.fixedExpense),
-        proLabore: money(b.proLabore),
+        proLabore: money(proLabore),
+        // Valor digitado na célula (null = nunca preenchido). O restante do
+        // pró-labore, se houver, vem de lançamentos e aparece no detalhamento.
+        proLaboreInput: proLaboreInput ? money(proLaboreInput) : null,
         investimentos: money(b.investment),
         lucroLiquido: money(lucro),
         margemLucroLiquido: margem,
@@ -243,6 +262,8 @@ export class ReportsService {
       openingBalance: money(new Prisma.Decimal(openingBalance)),
       months: monthsOut,
       total: {
+        // Soma dos 12 saldos iniciais — mesma leitura da planilha original.
+        saldoInicial: money(totalSaldoInicial),
         entradas: money(totals.entradas),
         saidas: money(totals.saidas),
         custosVariaveis: money(totals.custosVariaveis),
@@ -260,22 +281,54 @@ export class ReportsService {
     };
   }
 
-  /** Define (ou limpa, quando amount é null) o saldo inicial de um mês. */
+  /**
+   * Grava os valores digitados direto na planilha (saldo inicial e/ou
+   * pró-labore do mês). Passar `null` num campo devolve ele ao automático:
+   * saldo inicial volta ao carryover, pró-labore volta a zero. Quando os dois
+   * ficam vazios, a linha é removida.
+   */
   async setOpening(user: AuthUser, dto: SetOpeningDto) {
-    const { year, month, amount } = dto;
-    if (amount === null || amount === undefined) {
+    const { year, month } = dto;
+    const key = { ownerId_year_month: { ownerId: user.id, year, month } };
+
+    const current = await this.prisma.cashFlowOpening.findUnique({
+      where: key,
+      select: { amount: true, proLabore: true },
+    });
+
+    // Campo ausente no payload = mantém o que está gravado.
+    const amount =
+      dto.amount === undefined
+        ? (current?.amount ?? null)
+        : dto.amount === null
+          ? null
+          : new Prisma.Decimal(dto.amount);
+    const proLabore =
+      dto.proLabore === undefined
+        ? (current?.proLabore ?? null)
+        : dto.proLabore === null
+          ? null
+          : new Prisma.Decimal(dto.proLabore);
+
+    if (amount === null && proLabore === null) {
       await this.prisma.cashFlowOpening.deleteMany({
         where: { ownerId: user.id, year, month },
       });
       return { year, month, cleared: true };
     }
-    const value = new Prisma.Decimal(amount);
+
     await this.prisma.cashFlowOpening.upsert({
-      where: { ownerId_year_month: { ownerId: user.id, year, month } },
-      create: { ownerId: user.id, year, month, amount: value },
-      update: { amount: value },
+      where: key,
+      create: { ownerId: user.id, year, month, amount, proLabore },
+      update: { amount, proLabore },
     });
-    return { year, month, amount: money(value) };
+
+    return {
+      year,
+      month,
+      amount: amount ? money(amount) : null,
+      proLabore: proLabore ? money(proLabore) : null,
+    };
   }
 
   /**
