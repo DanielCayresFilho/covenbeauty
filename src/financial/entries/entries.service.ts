@@ -69,10 +69,12 @@ export class EntriesService {
       }),
       this.prisma.financialEntry.count({ where }),
       // Totais do filtro inteiro (não só da página) — alimenta os cards do topo.
+      // `orderBy` é exigido pela tipagem do groupBy dentro do $transaction.
       this.prisma.financialEntry.groupBy({
         by: ['category'],
         where,
         _sum: { amount: true },
+        orderBy: { category: 'asc' },
       }),
     ]);
 
@@ -183,11 +185,14 @@ export class EntriesService {
 
   /** Entradas, saídas (sem pró-labore) e lucro do conjunto filtrado. */
   private summarize(
-    sums: { category: CashFlowCategory; _sum: { amount: Prisma.Decimal | null } }[],
+    sums: {
+      category: CashFlowCategory;
+      _sum?: { amount?: Prisma.Decimal | null };
+    }[],
   ) {
     const zero = new Prisma.Decimal(0);
     const by = (c: CashFlowCategory) =>
-      sums.find((s) => s.category === c)?._sum.amount ?? zero;
+      sums.find((s) => s.category === c)?._sum?.amount ?? zero;
 
     const entradas = by(CashFlowCategory.INCOME);
     const proLabore = by(CashFlowCategory.PRO_LABORE);
