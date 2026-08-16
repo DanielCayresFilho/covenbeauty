@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "../lib/auth-context";
+import { HiddenValuesProvider } from "../lib/hidden-values";
 import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
@@ -137,8 +138,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <HiddenValuesProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </HiddenValuesProvider>
       </AuthProvider>
       <Toaster position="top-center" richColors />
     </QueryClientProvider>

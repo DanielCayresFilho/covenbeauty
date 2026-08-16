@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
+import { HideValuesButton } from "@/components/hide-values-button";
+import { useMaskedMoney } from "@/lib/hidden-values";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
@@ -82,6 +84,7 @@ function DashboardPage() {
 function Dashboard() {
   const { user } = useAuth();
   const firstName = user?.fullName?.split(" ")[0] ?? "";
+  const fmt = useMaskedMoney(brl);
 
   const summary = useQuery({
     queryKey: ["analytics", "summary"],
@@ -145,13 +148,16 @@ function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
-          Painel
-        </p>
-        <h1 className="mt-1 font-serif text-3xl text-parchment">
-          Olá, {firstName} ✦
-        </h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
+            Painel
+          </p>
+          <h1 className="mt-1 font-serif text-3xl text-parchment">
+            Olá, {firstName} ✦
+          </h1>
+        </div>
+        <HideValuesButton />
       </div>
 
       {/* Ações rápidas */}
@@ -183,7 +189,7 @@ function Dashboard() {
             <Stat
               icon={Wallet}
               label="Faturamento"
-              value={brl(summary.data!.revenue)}
+              value={fmt(summary.data!.revenue)}
             />
             <Stat
               icon={CalendarCheck}

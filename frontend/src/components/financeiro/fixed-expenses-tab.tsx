@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useMaskedMoney } from "@/lib/hidden-values";
 import { brl, type CashFlowCategory } from "./constants";
 
 interface FixedExpense {
@@ -71,6 +72,7 @@ function dueLabel(e: FixedExpense) {
 
 export function FixedExpensesTab() {
   const qc = useQueryClient();
+  const fmt = useMaskedMoney(brl);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<FixedExpense | null>(null);
   const [toDelete, setToDelete] = useState<FixedExpense | null>(null);
@@ -121,7 +123,7 @@ export function FixedExpensesTab() {
         <Card className="border-border bg-card/60 p-4">
           <p className="text-xs text-muted-foreground">Total mensal</p>
           <p className="mt-0.5 font-serif text-xl text-sky-600 dark:text-sky-400">
-            {brl(monthlyTotal)}
+            {fmt(monthlyTotal)}
           </p>
         </Card>
         <Card className="flex items-center justify-between border-border bg-card/60 p-4">
@@ -175,7 +177,7 @@ export function FixedExpensesTab() {
                 <span className={cn("shrink-0 text-xs", due.tone)}>{due.text}</span>
 
                 <span className="shrink-0 text-sm font-medium text-sky-600 dark:text-sky-400">
-                  {brl(e.amount)}
+                  {fmt(e.amount)}
                 </span>
 
                 <div className="flex shrink-0 items-center gap-1">
@@ -226,7 +228,7 @@ export function FixedExpensesTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Pagar "{toPay?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Lança {toPay ? brl(toPay.amount) : ""} como despesa fixa no fluxo de
+              Lança {toPay ? fmt(toPay.amount) : ""} como despesa fixa no fluxo de
               caixa, com a data de hoje.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { apiFetch, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   ACCOUNT_CATEGORIES,
   CATEGORY_LABEL,
@@ -60,6 +61,17 @@ export function AccountsTab() {
   const [editing, setEditing] = useState<Account | null>(null);
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<Account | null>(null);
+  // Grupos começam recolhidos: Entrada costuma ter uma conta por procedimento
+  // (dezenas), e a lista aberta esticaria a página inteira.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  const toggle = (cat: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
 
   const query = useQuery({
     queryKey: ["accounts"],
@@ -125,55 +137,76 @@ export function AccountsTab() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {groups.map((g) => (
-            <Card key={g.cat} className="border-border bg-card/60 p-4">
-              <p className="mb-3 flex items-center justify-between text-xs uppercase tracking-[0.2em]">
-                <span className={GROUP_TONE[g.cat]}>{CATEGORY_LABEL[g.cat]}</span>
-                <span className="text-muted-foreground">
-                  {g.items.length} {g.items.length === 1 ? "conta" : "contas"}
-                </span>
-              </p>
-              {g.items.length === 0 ? (
-                <p className="text-xs text-muted-foreground">— nenhuma —</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {g.items.map((a) => (
-                    <div
-                      key={a.id}
-                      className="flex items-center justify-between gap-2 rounded-md border border-border p-2.5"
-                    >
-                      <span className="min-w-0 truncate text-sm text-parchment">
-                        {a.name}
-                        {a.procedureId && (
-                          <span className="ml-2 text-[0.65rem] text-muted-foreground">
-                            (procedimento)
+          {groups.map((g) => {
+            const isOpen = open.has(g.cat);
+            return (
+              <Card key={g.cat} className="h-fit border-border bg-card/60 p-4">
+                <button
+                  type="button"
+                  onClick={() => toggle(g.cat)}
+                  disabled={g.items.length === 0}
+                  className="flex w-full items-center justify-between gap-2 text-xs uppercase tracking-[0.2em] disabled:cursor-default"
+                >
+                  <span className={cn("flex items-center gap-1.5", GROUP_TONE[g.cat])}>
+                    {g.items.length > 0 &&
+                      (isOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      ))}
+                    {CATEGORY_LABEL[g.cat]}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {g.items.length} {g.items.length === 1 ? "conta" : "contas"}
+                  </span>
+                </button>
+
+                {g.items.length === 0 ? (
+                  <p className="mt-3 text-xs text-muted-foreground">— nenhuma —</p>
+                ) : (
+                  isOpen && (
+                    // Rola dentro do card: mesmo aberto, um grupo com dezenas de
+                    // contas não estica a página.
+                    <div className="mt-3 max-h-80 space-y-1.5 overflow-y-auto pr-1">
+                      {g.items.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-border p-2.5"
+                        >
+                          <span className="min-w-0 truncate text-sm text-parchment">
+                            {a.name}
+                            {a.procedureId && (
+                              <span className="ml-2 text-[0.65rem] text-muted-foreground">
+                                (procedimento)
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          title="Renomear"
-                          onClick={() => setEditing(a)}
-                          className="p-1 text-muted-foreground hover:text-parchment"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Excluir"
-                          onClick={() => setToDelete(a)}
-                          className="p-1 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              title="Renomear"
+                              onClick={() => setEditing(a)}
+                              className="p-1 text-muted-foreground hover:text-parchment"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Excluir"
+                              onClick={() => setToDelete(a)}
+                              className="p-1 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ))}
+                  )
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 

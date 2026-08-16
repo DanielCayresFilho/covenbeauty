@@ -25,6 +25,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { apiFetch, ApiError } from "@/lib/api";
+import { useMaskedMoney } from "@/lib/hidden-values";
 import { brl } from "./constants";
 
 type GoalPeriod = "WEEKLY" | "MONTHLY" | "CUSTOM";
@@ -55,6 +56,7 @@ const fmtDate = (iso: string) => formatInTimeZone(new Date(iso), "UTC", "dd/MM/y
 
 export function GoalsTab() {
   const qc = useQueryClient();
+  const fmt = useMaskedMoney(brl);
   const [open, setOpen] = useState(false);
 
   const query = useQuery({
@@ -129,8 +131,8 @@ export function GoalsTab() {
                 <Progress value={Math.min(g.progress.percent, 100)} className="h-2" />
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-parchment">
-                    {brl(g.progress.achieved)}{" "}
-                    <span className="text-muted-foreground">/ {brl(g.progress.target)}</span>
+                    {fmt(g.progress.achieved)}{" "}
+                    <span className="text-muted-foreground">/ {fmt(g.progress.target)}</span>
                   </span>
                   <span className="text-blood">{g.progress.percent.toFixed(0)}%</span>
                 </div>

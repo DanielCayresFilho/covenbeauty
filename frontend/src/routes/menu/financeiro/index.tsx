@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/app-shell";
+import { HideValuesButton } from "@/components/hide-values-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CashFlowTab } from "@/components/financeiro/cash-flow-tab";
 import { EntriesTab } from "@/components/financeiro/entries-tab";
@@ -16,11 +17,14 @@ function FinanceiroPage() {
   return (
     <AppShell>
       <div className="space-y-5">
-        <div>
-          <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
-            Gestão
-          </p>
-          <h1 className="mt-1 font-serif text-3xl text-parchment">Financeiro</h1>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[0.6rem] uppercase tracking-[0.4em] text-blood">
+              Gestão
+            </p>
+            <h1 className="mt-1 font-serif text-3xl text-parchment">Financeiro</h1>
+          </div>
+          <HideValuesButton />
         </div>
 
         <Tabs defaultValue="cashflow">

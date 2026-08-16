@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useHiddenValues, useMaskedMoney } from "@/lib/hidden-values";
 import { MONTHS, money } from "./constants";
 
 interface MonthRow {
@@ -167,7 +168,7 @@ const BREAKDOWN_KEY: Partial<Record<RowKey, string>> = {
   proLabore: "proLabore",
 };
 
-const brl = (v: string | number | null) =>
+const brlRaw = (v: string | number | null) =>
   v == null ? "—" : `R$ ${money(v)}`;
 
 /** Verde quando positivo, vermelho quando negativo. */
@@ -178,6 +179,8 @@ const signTone = (v: string | number | null) =>
 
 export function CashFlowTab() {
   const qc = useQueryClient();
+  const brl = useMaskedMoney(brlRaw);
+  const { hidden } = useHiddenValues();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   // Seções abertas. As saídas já vêm abertas mostrando os três grupos; o
@@ -231,12 +234,12 @@ export function CashFlowTab() {
   /** A linha aparece? (subseções somem quando a seção-pai está fechada) */
   const isVisible = (row: RowDef) => !row.parent || open.has(row.parent);
 
+  // A margem também é escondida: sozinha ela já entrega a lucratividade.
+  const pct = (v: number | null) =>
+    hidden ? "••••" : v == null ? "—" : `${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`;
+
   const cellValue = (row: RowDef, mo: MonthRow) =>
-    row.percent
-      ? mo.margemLucroLiquido == null
-        ? "—"
-        : `${mo.margemLucroLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`
-      : brl(mo[row.key] as string);
+    row.percent ? pct(mo.margemLucroLiquido) : brl(mo[row.key] as string);
 
   return (
     <div className="space-y-4">
@@ -353,7 +356,20 @@ export function CashFlowTab() {
                       </td>
 
                       {data.months.map((mo) =>
-                        row.editable ? (
+                        // Com os valores escondidos a célula vira texto: não dá
+                        // para editar às cegas.
+                        row.editable && hidden ? (
+                          <td
+                            key={mo.month}
+                            className={cn("px-3 py-2.5 font-semibold", tone)}
+                          >
+                            {brl(
+                              row.editable === "saldoInicial"
+                                ? mo.saldoInicial
+                                : mo.proLabore,
+                            )}
+                          </td>
+                        ) : row.editable ? (
                           <td key={mo.month} className="px-1.5 py-1.5">
                             <SheetCell
                               value={
@@ -412,9 +428,7 @@ export function CashFlowTab() {
                         )}
                       >
                         {row.percent
-                          ? data.total.margemLucroLiquido == null
-                            ? "—"
-                            : `${data.total.margemLucroLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`
+                          ? pct(data.total.margemLucroLiquido)
                           : brl(
                               data.total[
                                 row.key as keyof CashFlow["total"]

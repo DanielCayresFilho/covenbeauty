@@ -26,6 +26,8 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { brl, MONTHS } from "@/components/financeiro/constants";
+import { HideValuesButton } from "@/components/hide-values-button";
+import { useMaskedMoney } from "@/lib/hidden-values";
 
 export const Route = createFileRoute("/menu/metricas/")({
   component: MetricasPage,
@@ -89,7 +91,8 @@ function Metricas() {
           </p>
           <h1 className="mt-1 font-serif text-3xl text-parchment">Métricas</h1>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <HideValuesButton />
           <Button variant="outline" size="icon" onClick={() => setYear((y) => y - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -120,6 +123,7 @@ function Metricas() {
 }
 
 function Overview({ data }: { data: Overview }) {
+  const fmt = useMaskedMoney(brl);
   const { totals, monthly, bestMonth } = data;
   const chartData = monthly.map((m) => ({
     mes: MONTHS[m.month - 1],
@@ -133,9 +137,9 @@ function Overview({ data }: { data: Overview }) {
     <>
       {/* Números do ano */}
       <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Stat label="Faturamento" value={brl(totals.revenue)} />
+        <Stat label="Faturamento" value={fmt(totals.revenue)} />
         <Stat label="Atendimentos" value={String(totals.appointments)} />
-        <Stat label="Ticket médio" value={brl(totals.averageTicket)} />
+        <Stat label="Ticket médio" value={fmt(totals.averageTicket)} />
         <Stat label="Clientes novos" value={String(totals.newClients)} />
       </section>
 
@@ -197,7 +201,7 @@ function Overview({ data }: { data: Overview }) {
                   }}
                   labelStyle={{ color: "var(--muted-foreground)" }}
                   formatter={(value: number, _n, item) => [
-                    `${value} atendimento${value === 1 ? "" : "s"} · ${brl(
+                    `${value} atendimento${value === 1 ? "" : "s"} · ${fmt(
                       (item?.payload as { faturamento: string }).faturamento,
                     )}`,
                     "",
@@ -234,7 +238,7 @@ function Overview({ data }: { data: Overview }) {
             position: i + 1,
             title: c.fullName,
             subtitle: `${c.visits} atendimento${c.visits === 1 ? "" : "s"}`,
-            value: brl(c.totalSpent),
+            value: fmt(c.totalSpent),
           }))}
         />
       </section>
@@ -263,7 +267,7 @@ function Overview({ data }: { data: Overview }) {
             key: p.name + i,
             position: i + 1,
             title: p.name,
-            subtitle: `${p.count}x · ${brl(p.total)} no total`,
+            subtitle: `${p.count}x · ${fmt(p.total)} no total`,
             value: `${p.count}x`,
           }))}
         />

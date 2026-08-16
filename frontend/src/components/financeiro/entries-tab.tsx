@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useMaskedMoney } from "@/lib/hidden-values";
 import {
   ACCOUNT_CATEGORIES,
   BELOW_LINE_CATEGORIES,
@@ -105,6 +106,7 @@ const EMPTY_FILTERS: Filters = { from: "", to: "", category: "", clientId: "" };
 
 export function EntriesTab() {
   const qc = useQueryClient();
+  const fmt = useMaskedMoney(brl);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [editing, setEditing] = useState<Entry | null>(null);
@@ -320,7 +322,7 @@ export function EntriesTab() {
                     )}
                   >
                     {isIncome(e.category) ? "+" : isExpense(e.category) ? "−" : ""}
-                    {brl(e.amount)}
+                    {fmt(e.amount)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
                     {/* Lançamento de comanda só muda reabrindo a comanda. */}
@@ -422,12 +424,13 @@ function StatCard({
   icon: React.ReactNode;
   tone: string;
 }) {
+  const fmt = useMaskedMoney(brl);
   return (
     <Card className="flex items-center justify-between border-border bg-card/60 p-4">
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className={cn("mt-0.5 font-serif text-xl", tone)}>
-          {value == null ? "—" : brl(value)}
+          {value == null ? "—" : fmt(value)}
         </p>
       </div>
       <span className={cn("opacity-70", tone)}>{icon}</span>
