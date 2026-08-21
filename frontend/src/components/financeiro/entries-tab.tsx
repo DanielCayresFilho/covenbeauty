@@ -3,21 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatInTimeZone } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowDownRight, ArrowUpRight, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Combobox, type ComboItem } from "@/components/ui/combobox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -39,12 +33,39 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useMaskedMoney } from "@/lib/hidden-values";
 import {
-  ACCOUNT_CATEGORIES,
   BELOW_LINE_CATEGORIES,
   CATEGORY_LABEL,
   brl,
   type CashFlowCategory,
 } from "./constants";
+
+/** Grupo da aba. Espelha o `kind` aceito pelo backend. */
+type Kind = "income" | "expense" | "movement";
+
+/** Contas que cada aba oferece no formulário. */
+const KIND_ACCOUNT_CATEGORIES: Record<Kind, CashFlowCategory[]> = {
+  income: ["INCOME"],
+  expense: ["VARIABLE_COST", "FIXED_EXPENSE", "PRO_LABORE", "INVESTMENT"],
+  movement: [],
+};
+
+const KIND_LABEL: Record<Kind, { tab: string; novo: string; vazio: string }> = {
+  income: {
+    tab: "Entradas",
+    novo: "Entrada",
+    vazio: "Nenhuma entrada lançada ainda.",
+  },
+  expense: {
+    tab: "Saídas",
+    novo: "Saída",
+    vazio: "Nenhuma saída lançada ainda.",
+  },
+  movement: {
+    tab: "Movimentações",
+    novo: "Movimentação",
+    vazio: "Nenhuma distribuição, aplicação ou resgate lançado ainda.",
+  },
+};
 
 interface Account {
   id: string;
@@ -64,25 +85,24 @@ interface Entry {
   account: { id: string; name: string; category: CashFlowCategory } | null;
   clientId: string | null;
   client: { id: string; fullName: string } | null;
-  comandaId: string | null;
   description: string | null;
+}
+interface Totals {
+  entradas: string;
+  saidas: string;
+  proLabore: string;
+  lucro: string;
+  distribuicao: string;
+  aplicacao: string;
+  resgate: string;
 }
 interface Paginated<T> {
   data: T[];
-  meta: {
-    total: number;
-    page: number;
-    pages: number;
-    totals: { entradas: string; saidas: string; proLabore: string; lucro: string };
-  };
+  meta: { total: number; page: number; pages: number; totals: Totals };
 }
 
 const fmtDate = (iso: string) =>
   formatInTimeZone(new Date(iso), "UTC", "dd/MM/yyyy", { locale: ptBR });
-
-const isIncome = (c: CashFlowCategory) => c === "INCOME";
-const isExpense = (c: CashFlowCategory) =>
-  ["VARIABLE_COST", "FIXED_EXPENSE", "PRO_LABORE", "INVESTMENT"].includes(c);
 
 const TONE: Record<CashFlowCategory, string> = {
   INCOME: "text-emerald-600 dark:text-emerald-400",
@@ -95,16 +115,47 @@ const TONE: Record<CashFlowCategory, string> = {
   REDEMPTION: "text-muted-foreground",
 };
 
-/** Estado dos filtros do topo. */
 interface Filters {
   from: string;
   to: string;
-  category: string;
   clientId: string;
 }
-const EMPTY_FILTERS: Filters = { from: "", to: "", category: "", clientId: "" };
+const EMPTY_FILTERS: Filters = { from: "", to: "", clientId: "" };
 
+/**
+ * Lançamentos separados por natureza — entradas, saídas e movimentações em
+ * abas próprias, como eram as telas "Entradas Analíticas" e "Saídas
+ * Analíticas" do sistema antigo.
+ */
 export function EntriesTab() {
+  return (
+    <Tabs defaultValue="income" className="space-y-4">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="income" className="gap-1.5">
+          <ArrowUpRight className="h-4 w-4" /> Entradas
+        </TabsTrigger>
+        <TabsTrigger value="expense" className="gap-1.5">
+          <ArrowDownRight className="h-4 w-4" /> Saídas
+        </TabsTrigger>
+        <TabsTrigger value="movement" className="gap-1.5">
+          <ArrowLeftRight className="h-4 w-4" /> Movimentações
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="income" className="cb-fade-in">
+        <EntryList kind="income" />
+      </TabsContent>
+      <TabsContent value="expense" className="cb-fade-in">
+        <EntryList kind="expense" />
+      </TabsContent>
+      <TabsContent value="movement" className="cb-fade-in">
+        <EntryList kind="movement" />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function EntryList({ kind }: { kind: Kind }) {
   const qc = useQueryClient();
   const fmt = useMaskedMoney(brl);
   const [page, setPage] = useState(1);
@@ -125,13 +176,12 @@ export function EntriesTab() {
   });
 
   const params = useMemo(() => {
-    const q = new URLSearchParams({ page: String(page), limit: "20" });
+    const q = new URLSearchParams({ kind, page: String(page), limit: "20" });
     if (filters.from) q.set("from", filters.from);
     if (filters.to) q.set("to", filters.to);
-    if (filters.category) q.set("category", filters.category);
     if (filters.clientId) q.set("clientId", filters.clientId);
     return q.toString();
-  }, [page, filters]);
+  }, [kind, page, filters]);
 
   const query = useQuery({
     queryKey: ["entries", params],
@@ -157,40 +207,51 @@ export function EntriesTab() {
     value: c.id,
     label: c.fullName,
   }));
-
   const hasFilters = Object.values(filters).some(Boolean);
+  const labels = KIND_LABEL[kind];
+
+  // Cada aba resume o que é seu — o pró-labore aparece separado das despesas
+  // porque no fluxo ele não entra nas saídas.
+  const cards =
+    kind === "income"
+      ? [{ label: "Total de entradas", value: totals?.entradas, tone: TONE.INCOME }]
+      : kind === "expense"
+        ? [
+            { label: "Custos e despesas", value: totals?.saidas, tone: "text-rose-600 dark:text-rose-400" },
+            { label: "Pró-labore", value: totals?.proLabore, tone: TONE.PRO_LABORE },
+          ]
+        : [
+            { label: "Distribuição", value: totals?.distribuicao, tone: "text-foreground" },
+            { label: "Aplicação", value: totals?.aplicacao, tone: "text-foreground" },
+            { label: "Resgate", value: totals?.resgate, tone: "text-foreground" },
+          ];
 
   return (
     <div className="space-y-4">
-      {/* Resumo do que está filtrado (não só da página). */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Entradas"
-          value={totals?.entradas}
-          icon={<ArrowUpRight className="h-5 w-5" />}
-          tone="text-emerald-600 dark:text-emerald-400"
-        />
-        <StatCard
-          label="Saídas"
-          value={totals?.saidas}
-          icon={<ArrowDownRight className="h-5 w-5" />}
-          tone="text-rose-600 dark:text-rose-400"
-        />
-        <StatCard
-          label="Lucro"
-          value={totals?.lucro}
-          icon={<Wallet className="h-5 w-5" />}
-          tone={
-            Number(totals?.lucro ?? 0) < 0
-              ? "text-rose-600 dark:text-rose-400"
-              : "text-emerald-600 dark:text-emerald-400"
-          }
-        />
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-3",
+          cards.length === 2 && "sm:grid-cols-2",
+          cards.length === 3 && "sm:grid-cols-3",
+        )}
+      >
+        {cards.map((c) => (
+          <Card
+            key={c.label}
+            className="flex items-center justify-between border-border bg-card/60 p-4"
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">{c.label}</p>
+              <p className={cn("mt-0.5 font-serif text-xl", c.tone)}>
+                {c.value == null ? "—" : fmt(c.value)}
+              </p>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Filtros */}
       <Card className="border-border bg-card/60 p-3">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Data inicial</Label>
             <Input
@@ -208,25 +269,6 @@ export function EntriesTab() {
               onChange={(e) => setFilter({ to: e.target.value })}
               className="h-10"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tipo</Label>
-            <Select
-              value={filters.category || "all"}
-              onValueChange={(v) => setFilter({ category: v === "all" ? "" : v })}
-            >
-              <SelectTrigger className="h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                {[...ACCOUNT_CATEGORIES, ...BELOW_LINE_CATEGORIES].map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {CATEGORY_LABEL[c]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Cliente</Label>
@@ -253,7 +295,7 @@ export function EntriesTab() {
             Limpar filtros
           </Button>
           <Button className="gap-1" onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Lançamento
+            <Plus className="h-4 w-4" /> {labels.novo}
           </Button>
         </div>
       </Card>
@@ -270,9 +312,7 @@ export function EntriesTab() {
         </Card>
       ) : query.data!.data.length === 0 ? (
         <Card className="border-dashed border-border bg-transparent p-8 text-center text-sm text-muted-foreground">
-          {hasFilters
-            ? "Nenhum lançamento com esses filtros."
-            : "Nenhum lançamento ainda."}
+          {hasFilters ? "Nenhum lançamento com esses filtros." : labels.vazio}
         </Card>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -280,8 +320,12 @@ export function EntriesTab() {
             <thead className="bg-secondary text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold">Data</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Conta</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Tipo</th>
+                <th className="px-3 py-2.5 text-left font-semibold">
+                  {kind === "movement" ? "Movimentação" : "Conta"}
+                </th>
+                {kind !== "movement" && (
+                  <th className="px-3 py-2.5 text-left font-semibold">Tipo</th>
+                )}
                 <th className="px-3 py-2.5 text-left font-semibold">Cliente</th>
                 <th className="px-3 py-2.5 text-left font-semibold">Descrição</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Valor</th>
@@ -295,59 +339,56 @@ export function EntriesTab() {
                     {fmtDate(e.date)}
                   </td>
                   <td className="px-3 py-2.5 text-parchment">
-                    {e.account?.name ?? "—"}
+                    {e.account?.name ?? CATEGORY_LABEL[e.category]}
                   </td>
-                  <td className={cn("whitespace-nowrap px-3 py-2.5 text-xs", TONE[e.category])}>
-                    {CATEGORY_LABEL[e.category]}
-                  </td>
+                  {kind !== "movement" && (
+                    <td
+                      className={cn(
+                        "whitespace-nowrap px-3 py-2.5 text-xs",
+                        TONE[e.category],
+                      )}
+                    >
+                      {CATEGORY_LABEL[e.category]}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 text-muted-foreground">
                     {e.client?.fullName ?? "—"}
                   </td>
                   <td className="max-w-56 truncate px-3 py-2.5 text-muted-foreground">
                     {e.description ?? "—"}
-                    {e.comandaId && (
-                      <span className="ml-1.5 text-[0.65rem] uppercase tracking-wide text-blood">
-                        comanda
-                      </span>
-                    )}
                   </td>
                   <td
                     className={cn(
                       "whitespace-nowrap px-3 py-2.5 text-right font-medium",
-                      isIncome(e.category)
+                      kind === "income"
                         ? "text-emerald-600 dark:text-emerald-400"
-                        : isExpense(e.category)
+                        : kind === "expense"
                           ? "text-rose-600 dark:text-rose-400"
                           : "text-foreground",
                     )}
                   >
-                    {isIncome(e.category) ? "+" : isExpense(e.category) ? "−" : ""}
+                    {kind === "income" ? "+" : kind === "expense" ? "−" : ""}
                     {fmt(e.amount)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                    {/* Lançamento de comanda só muda reabrindo a comanda. */}
-                    {e.comandaId ? (
-                      <span className="text-xs text-muted-foreground">automático</span>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          title="Editar"
-                          onClick={() => setEditing(e)}
-                          className="p-1.5 text-muted-foreground hover:text-parchment"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Excluir"
-                          onClick={() => setToDelete(e)}
-                          className="p-1.5 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        title="Editar"
+                        onClick={() => setEditing(e)}
+                        className="p-1.5 text-muted-foreground hover:text-parchment"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Excluir"
+                        onClick={() => setToDelete(e)}
+                        className="p-1.5 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -381,6 +422,7 @@ export function EntriesTab() {
       )}
 
       <EntryForm
+        kind={kind}
         open={creating || !!editing}
         entry={editing}
         clients={clientItems}
@@ -413,38 +455,15 @@ export function EntriesTab() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value?: string;
-  icon: React.ReactNode;
-  tone: string;
-}) {
-  const fmt = useMaskedMoney(brl);
-  return (
-    <Card className="flex items-center justify-between border-border bg-card/60 p-4">
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={cn("mt-0.5 font-serif text-xl", tone)}>
-          {value == null ? "—" : fmt(value)}
-        </p>
-      </div>
-      <span className={cn("opacity-70", tone)}>{icon}</span>
-    </Card>
-  );
-}
-
-/** Formulário de criação e edição (a mesma folha, como no sistema antigo). */
+/** Formulário de criação e edição, já restrito às contas da aba. */
 function EntryForm({
+  kind,
   open,
   entry,
   clients,
   onClose,
 }: {
+  kind: Kind;
   open: boolean;
   entry: Entry | null;
   clients: ComboItem[];
@@ -459,11 +478,7 @@ function EntryForm({
 
   useEffect(() => {
     if (!open) return;
-    setSource(
-      entry
-        ? (entry.accountId ?? `below:${entry.category}`)
-        : "",
-    );
+    setSource(entry ? (entry.accountId ?? `below:${entry.category}`) : "");
     setDate(
       entry
         ? formatInTimeZone(new Date(entry.date), "UTC", "yyyy-MM-dd")
@@ -481,20 +496,23 @@ function EntryForm({
     enabled: open,
   });
 
-  // Contas agrupadas por tipo + as movimentações abaixo da linha, num único
-  // seletor com busca (o antigo tinha um campo "pesquisar categoria").
-  const sourceItems: ComboItem[] = [
-    ...ACCOUNT_CATEGORIES.flatMap((cat) =>
-      (accounts.data ?? [])
-        .filter((a) => a.category === cat)
-        .map((a) => ({ value: a.id, label: a.name, hint: CATEGORY_LABEL[cat] })),
-    ),
-    ...BELOW_LINE_CATEGORIES.map((c) => ({
-      value: `below:${c}`,
-      label: CATEGORY_LABEL[c],
-      hint: "Movimentação",
-    })),
-  ];
+  const allowed = KIND_ACCOUNT_CATEGORIES[kind];
+  const sourceItems: ComboItem[] =
+    kind === "movement"
+      ? BELOW_LINE_CATEGORIES.map((c) => ({
+          value: `below:${c}`,
+          label: CATEGORY_LABEL[c],
+        }))
+      : allowed.flatMap((cat) =>
+          (accounts.data ?? [])
+            .filter((a) => a.category === cat)
+            .map((a) => ({
+              value: a.id,
+              label: a.name,
+              // Numa aba com um tipo só, repetir o rótulo seria ruído.
+              hint: allowed.length > 1 ? CATEGORY_LABEL[cat] : undefined,
+            })),
+        );
 
   const save = useMutation({
     mutationFn: () => {
@@ -504,12 +522,9 @@ function EntryForm({
         clientId: clientId || null,
         description: description || undefined,
       };
-      if (source.startsWith("below:")) {
-        body.category = source.slice(6);
-        body.accountId = undefined;
-      } else {
-        body.accountId = source;
-      }
+      if (source.startsWith("below:")) body.category = source.slice(6);
+      else body.accountId = source;
+
       return entry
         ? apiFetch(`/financial/entries/${entry.id}`, {
             method: "PATCH",
@@ -532,34 +547,36 @@ function EntryForm({
   });
 
   function submit() {
-    if (!source) return toast.error("Escolha a conta ou movimentação");
+    if (!source) return toast.error("Escolha a conta");
     if (!date) return toast.error("Informe a data");
     if (!amount || Number(amount) <= 0) return toast.error("Valor inválido");
     save.mutate();
   }
+
+  const labels = KIND_LABEL[kind];
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="font-serif text-2xl text-parchment">
-            {entry ? "Editar lançamento" : "Novo lançamento"}
+            {entry ? `Editar ${labels.novo.toLowerCase()}` : `Nova ${labels.novo.toLowerCase()}`}
           </SheetTitle>
         </SheetHeader>
         <div className="space-y-4 px-4 pb-4">
           <div className="space-y-1.5">
-            <Label>Conta / movimentação</Label>
+            <Label>{kind === "movement" ? "Movimentação" : "Conta"}</Label>
             <Combobox
               items={sourceItems}
               value={source}
               onChange={setSource}
               placeholder="Selecione"
-              searchPlaceholder="Buscar conta..."
+              searchPlaceholder="Buscar..."
               className="h-11 w-full"
             />
-            {sourceItems.length === BELOW_LINE_CATEGORIES.length && (
+            {kind !== "movement" && sourceItems.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Cadastre contas na aba "Contas".
+                Nenhuma conta deste tipo. Cadastre na aba "Contas".
               </p>
             )}
           </div>
@@ -586,6 +603,10 @@ function EntryForm({
               />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            A data pode ser de qualquer dia — use para lançar movimentos de meses
+            anteriores.
+          </p>
 
           <div className="space-y-1.5">
             <Label>Cliente (opcional)</Label>

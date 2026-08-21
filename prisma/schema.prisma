@@ -418,9 +418,6 @@ model Comanda {
   procedures ComandaProcedure[]
   products   ComandaProduct[]
 
-  // Lançamentos gerados no fechamento (removidos ao reabrir/excluir).
-  financialEntries FinancialEntry[]
-
   openedAt  DateTime  @default(now()) @map("opened_at")
   closedAt  DateTime? @map("closed_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -513,11 +510,6 @@ model FinancialEntry {
   clientId String? @map("client_id") @db.Uuid
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  // Comanda que gerou este lançamento automaticamente. Reabrir/excluir a
-  // comanda desfaz os lançamentos dela.
-  comandaId String?  @map("comanda_id") @db.Uuid
-  comanda   Comanda? @relation(fields: [comandaId], references: [id], onDelete: Cascade)
-
   // Despesa fixa cujo pagamento gerou este lançamento (evita pagar 2x no mês).
   fixedExpenseId String?       @map("fixed_expense_id") @db.Uuid
   fixedExpense   FixedExpense? @relation(fields: [fixedExpenseId], references: [id], onDelete: SetNull)
@@ -535,7 +527,6 @@ model FinancialEntry {
   @@index([category])
   @@index([accountId])
   @@index([clientId])
-  @@index([comandaId])
   @@index([ownerId])
   @@map("financial_entries")
 }

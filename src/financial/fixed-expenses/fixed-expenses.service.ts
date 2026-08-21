@@ -122,8 +122,9 @@ export class FixedExpensesService {
       select: { id: true },
     });
     if (existing) {
+      const mes = `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
       throw new ConflictException(
-        'Esta despesa já foi paga neste mês. Remova o lançamento antes de pagar de novo.',
+        `Esta despesa já tem pagamento lançado em ${mes}. Remova o lançamento antes de pagar de novo.`,
       );
     }
 

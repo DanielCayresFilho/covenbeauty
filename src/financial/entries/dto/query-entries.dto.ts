@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsUUID,
@@ -11,11 +12,23 @@ import {
 } from 'class-validator';
 import { CashFlowCategory } from '@prisma/client';
 
+/** Grupos usados nas abas de lançamentos. */
+export type EntryKind = 'income' | 'expense' | 'movement';
+
 export class QueryEntriesDto {
   @ApiPropertyOptional({ enum: CashFlowCategory })
   @IsOptional()
   @IsEnum(CashFlowCategory)
   category?: CashFlowCategory;
+
+  @ApiPropertyOptional({
+    enum: ['income', 'expense', 'movement'],
+    description:
+      'Grupo: income = entradas; expense = custos, despesas, pró-labore e investimentos; movement = distribuição, aplicação e resgate.',
+  })
+  @IsOptional()
+  @IsIn(['income', 'expense', 'movement'])
+  kind?: EntryKind;
 
   @ApiPropertyOptional({ description: 'Filtra por conta' })
   @IsOptional()

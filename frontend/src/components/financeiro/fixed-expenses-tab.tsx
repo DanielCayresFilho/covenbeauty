@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatInTimeZone } from "date-fns-tz";
 import { toast } from "sonner";
 import { CalendarClock, Check, Pencil, Plus, Trash2 } from "lucide-react";
 
@@ -85,10 +86,10 @@ export function FixedExpensesTab() {
   });
 
   const pay = useMutation({
-    mutationFn: (id: string) =>
-      apiFetch(`/financial/fixed-expenses/${id}/pay`, {
+    mutationFn: (vars: { id: string; date: string; amount: number }) =>
+      apiFetch(`/financial/fixed-expenses/${vars.id}/pay`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ date: vars.date, amount: vars.amount }),
       }),
     onSuccess: () => {
       toast.success("Pagamento lançado no fluxo ✦");
@@ -223,23 +224,14 @@ export function FixedExpensesTab() {
         }}
       />
 
-      <AlertDialog open={!!toPay} onOpenChange={(o) => !o && setToPay(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Pagar "{toPay?.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Lança {toPay ? fmt(toPay.amount) : ""} como despesa fixa no fluxo de
-              caixa, com a data de hoje.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => toPay && pay.mutate(toPay.id)}>
-              Confirmar pagamento
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <PayDialog
+        expense={toPay}
+        onClose={() => setToPay(null)}
+        onConfirm={(date, amount) =>
+          toPay && pay.mutate({ id: toPay.id, date, amount })
+        }
+        pending={pay.isPending}
+      />
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
@@ -262,6 +254,88 @@ export function FixedExpensesTab() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * Confirmação do pagamento com data e valor editáveis — é o que permite
+ * registrar contas pagas em meses anteriores (retroativo).
+ */
+function PayDialog({
+  expense,
+  onClose,
+  onConfirm,
+  pending,
+}: {
+  expense: FixedExpense | null;
+  onClose: () => void;
+  onConfirm: (date: string, amount: number) => void;
+  pending: boolean;
+}) {
+  const [date, setDate] = useState("");
+  const [amount, setAmount] = useState("");
+
+  useEffect(() => {
+    if (!expense) return;
+    setDate(formatInTimeZone(new Date(), "America/Sao_Paulo", "yyyy-MM-dd"));
+    setAmount(expense.amount);
+  }, [expense]);
+
+  return (
+    <AlertDialog open={!!expense} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Pagar "{expense?.name}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Lança uma saída de despesa fixa no fluxo de caixa. Mude a data para
+            registrar um pagamento de um mês anterior.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Data do pagamento</Label>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-11"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Valor pago (R$)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-11"
+            />
+          </div>
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={pending}
+            onClick={(e) => {
+              if (!date) {
+                e.preventDefault();
+                return toast.error("Informe a data do pagamento");
+              }
+              if (!amount || Number(amount) <= 0) {
+                e.preventDefault();
+                return toast.error("Valor inválido");
+              }
+              onConfirm(date, Number(amount));
+            }}
+          >
+            Confirmar pagamento
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

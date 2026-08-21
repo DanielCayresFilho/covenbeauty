@@ -9,7 +9,6 @@ import { ReportsService } from './reports/reports.service';
 import { ReportsController } from './reports/reports.controller';
 import { FixedExpensesService } from './fixed-expenses/fixed-expenses.service';
 import { FixedExpensesController } from './fixed-expenses/fixed-expenses.controller';
-import { ComandaFinancialService } from './sync/comanda-financial.service';
 
 @Module({
   controllers: [
@@ -25,9 +24,6 @@ import { ComandaFinancialService } from './sync/comanda-financial.service';
     GoalsService,
     ReportsService,
     FixedExpensesService,
-    ComandaFinancialService,
   ],
-  // As comandas alimentam o fluxo de caixa ao fechar.
-  exports: [ComandaFinancialService],
 })
 export class FinancialModule {}

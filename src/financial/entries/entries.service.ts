@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,12 +10,24 @@ import { ownerWhere } from '@/common/ownership';
 import { BELOW_LINE_CATEGORIES } from '../financial.constants';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
-import { QueryEntriesDto } from './dto/query-entries.dto';
+import { QueryEntriesDto, type EntryKind } from './dto/query-entries.dto';
 
 const ENTRY_INCLUDE = {
   account: { select: { id: true, name: true, category: true } },
   client: { select: { id: true, fullName: true } },
 } satisfies Prisma.FinancialEntryInclude;
+
+/** Categorias de cada aba de lançamentos. */
+const KIND_CATEGORIES: Record<EntryKind, CashFlowCategory[]> = {
+  income: [CashFlowCategory.INCOME],
+  expense: [
+    CashFlowCategory.VARIABLE_COST,
+    CashFlowCategory.FIXED_EXPENSE,
+    CashFlowCategory.PRO_LABORE,
+    CashFlowCategory.INVESTMENT,
+  ],
+  movement: BELOW_LINE_CATEGORIES,
+};
 
 @Injectable()
 export class EntriesService {
@@ -42,11 +53,16 @@ export class EntriesService {
   }
 
   async findAll(query: QueryEntriesDto, user: AuthUser) {
-    const { category, accountId, clientId, from, to, page, limit } = query;
+    const { category, kind, accountId, clientId, from, to, page, limit } = query;
 
     const where: Prisma.FinancialEntryWhereInput = {
       ...ownerWhere(user),
-      ...(category ? { category } : {}),
+      // `category` (uma só) tem prioridade sobre `kind` (o grupo da aba).
+      ...(category
+        ? { category }
+        : kind
+          ? { category: { in: KIND_CATEGORIES[kind] } }
+          : {}),
       ...(accountId ? { accountId } : {}),
       ...(clientId ? { clientId } : {}),
       ...(from || to
@@ -102,13 +118,7 @@ export class EntriesService {
   }
 
   async update(id: string, dto: UpdateEntryDto, user: AuthUser) {
-    const current = await this.findOne(id, user);
-
-    if (current.comandaId) {
-      throw new ConflictException(
-        'Este lançamento veio de uma comanda. Reabra a comanda para alterá-lo.',
-      );
-    }
+    await this.findOne(id, user);
     if (dto.clientId) await this.assertClient(dto.clientId, user);
 
     // Trocar a conta (ou a movimentação) recalcula a categoria.
@@ -137,12 +147,7 @@ export class EntriesService {
   }
 
   async remove(id: string, user: AuthUser) {
-    const entry = await this.findOne(id, user);
-    if (entry.comandaId) {
-      throw new ConflictException(
-        'Este lançamento veio de uma comanda. Reabra a comanda para removê-lo.',
-      );
-    }
+    await this.findOne(id, user);
     await this.prisma.financialEntry.delete({ where: { id } });
     return { deleted: true, id };
   }
@@ -206,6 +211,9 @@ export class EntriesService {
       saidas: saidas.toFixed(2),
       proLabore: proLabore.toFixed(2),
       lucro: entradas.minus(saidas).toFixed(2),
+      distribuicao: by(CashFlowCategory.PROFIT_DISTRIBUTION).toFixed(2),
+      aplicacao: by(CashFlowCategory.APPLICATION).toFixed(2),
+      resgate: by(CashFlowCategory.REDEMPTION).toFixed(2),
     };
   }
 }
